@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +8,135 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  HR
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+}
+
+enum LeaveType {
+  PAID
+  SICK
+  UNPAID
+  CASUAL
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model Employee {
+  id             String         @id @default(cuid())
+  clerkUserId    String         @unique
+  loginId        String         @unique // OI + first2(first) + first2(last) + joinYear + 4-digit serial
+  employeeId     String         @unique // display ID e.g. EMP001
+  firstName      String
+  lastName       String
+  email          String         @unique
+  phone          String?
+  role           Role           @default(EMPLOYEE)
+  department     String?
+  designation    String?
+  dateOfJoining  DateTime
+  status         EmployeeStatus @default(ACTIVE)
+  profilePicture String?
+  address        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // Relations
+  attendances   Attendance[]
+  leaveRequests LeaveRequest[]
+  payroll       Payroll?
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  employeeId  String
+  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime         @db.Date
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      AttendanceStatus
+  hoursWorked Float?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
+}
+
+model LeaveRequest {
+  id           String      @id @default(cuid())
+  employeeId   String
+  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  totalDays    Int
+  reason       String
+  status       LeaveStatus @default(PENDING)
+  adminComment String?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+model Payroll {
+  id                String   @id @default(cuid())
+  employeeId        String   @unique
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  wage              Float
+  basicSalary       Float
+  hra               Float
+  standardAllowance Float
+  performanceBonus  Float
+  lta               Float
+  fixedAllowance    Float
+  pfEmployee        Float
+  pfEmployer        Float
+  professionalTax   Float
+  netPayable        Float
+  payableDays       Int      @default(0)
+  totalWorkingDays  Int      @default(22)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model SalaryConfig {
+  id                   String   @id @default(cuid())
+  pfEmployeeRate       Float    @default(0.12)
+  pfEmployerRate       Float    @default(0.12)
+  professionalTax      Float    @default(200)
+  standardAllowance    Float    @default(4167)
+  performanceBonusRate Float    @default(0.0833)
+  ltaRate              Float    @default(0.0833)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
