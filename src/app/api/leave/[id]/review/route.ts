@@ -58,6 +58,8 @@ export async function PATCH(
       include: {
         employee: {
           select: {
+            userId: true,
+            email: true,
             firstName: true,
             lastName: true,
             employeeId: true,
@@ -65,6 +67,23 @@ export async function PATCH(
         },
       },
     });
+
+    // Notify the employee about the review decision
+    try {
+      const { createNotification } = await import("@/lib/notifications");
+      await createNotification({
+        userId: updated.employee.userId,
+        userEmail: updated.employee.email || undefined,
+        title: `Leave Request ${status}`,
+        message: `Your ${leaveRequest.leaveType} leave request (${leaveRequest.totalDays} day(s)) has been ${status.toLowerCase()}.${adminComment ? ` Reviewer note: "${adminComment}"` : ""}`,
+        type: status === "APPROVED" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
+        link: `/dashboard/leave`,
+        emailSubject: `[Dayflow HRMS] Leave Request ${status}: ${leaveRequest.leaveType}`,
+        emailText: `Hello ${updated.employee.firstName},\n\nYour ${leaveRequest.leaveType} leave request for ${leaveRequest.totalDays} day(s) has been ${status.toLowerCase()}.${adminComment ? `\n\nReviewer Comment: ${adminComment}` : ""}\n\nRegards,\nDayflow HR Team`,
+      });
+    } catch (notifyErr) {
+      console.error("Failed to dispatch leave review notification to employee:", notifyErr);
+    }
 
     // If approved, create ON_LEAVE attendance records for each day in the leave period
     if (status === "APPROVED") {

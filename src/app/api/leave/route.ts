@@ -68,6 +68,21 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Notify all Admins and HRs about the new leave submission
+    try {
+      const { notifyAdmins } = await import("@/lib/notifications");
+      await notifyAdmins({
+        title: "New Leave Request Submitted",
+        message: `${employee.firstName} ${employee.lastName} has submitted a ${leaveType} leave request for ${totalDays} day(s).`,
+        type: "LEAVE_SUBMITTED",
+        link: `/dashboard/leave`,
+        emailSubject: `[Dayflow HRMS] New Leave Request: ${employee.firstName} ${employee.lastName}`,
+        emailText: `Hello Admin/HR,\n\n${employee.firstName} ${employee.lastName} has applied for ${leaveType} leave from ${start.toISOString().split("T")[0]} to ${end.toISOString().split("T")[0]} (${totalDays} day(s)).\n\nReason: ${reason}\n\nPlease review it in the Dayflow HRMS portal.`,
+      });
+    } catch (notifyErr) {
+      console.error("Failed to dispatch leave notification to admins:", notifyErr);
+    }
+
     return NextResponse.json(
       { message: "Leave request submitted.", leaveRequest },
       { status: 201 }

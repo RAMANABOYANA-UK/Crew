@@ -98,7 +98,7 @@ async function main() {
       },
     });
 
-    createdEmployees.push({ id: employee.id, wage: emp.wage, firstName: emp.firstName, lastName: emp.lastName });
+    createdEmployees.push({ id: employee.id, userId: user.id, wage: emp.wage, firstName: emp.firstName, lastName: emp.lastName });
     console.log(`👤 Created ${emp.role.padEnd(8)} ${emp.firstName} ${emp.lastName} (${loginId}, ${employeeId})`);
   }
   console.log("");
@@ -206,6 +206,26 @@ async function main() {
     });
     console.log(`💰 Payroll for ${emp.firstName.padEnd(10)} — Wage: ₹${emp.wage.toLocaleString("en-IN").padStart(8)}, Net: ₹${breakdown.netPayable.toLocaleString("en-IN").padStart(8)}`);
   }
+
+  // 6. Create Sample Notifications
+  const adminUser = createdEmployees[0];
+  const hrUser = createdEmployees[1];
+  const emp1 = createdEmployees[2]; // Amit Patel
+  const emp2 = createdEmployees[3]; // Sneha Reddy
+
+  const sampleNotifications = [
+    { userId: adminUser.userId, title: "New Leave Request Submitted", message: "Amit Patel has applied for 3 days of PAID leave.", type: "LEAVE_SUBMITTED" as const, isRead: false },
+    { userId: adminUser.userId, title: "New Leave Request Submitted", message: "Sneha Reddy has applied for 2 days of SICK leave.", type: "LEAVE_SUBMITTED" as const, isRead: false },
+    { userId: hrUser.userId, title: "New Leave Request Submitted", message: "Rohan Joshi has applied for 1 day of CASUAL leave.", type: "LEAVE_SUBMITTED" as const, isRead: true },
+    { userId: emp1.userId, title: "Leave Request Approved", message: "Your CASUAL leave request for 3 days was rejected.", type: "LEAVE_REJECTED" as const, isRead: true },
+    { userId: emp2.userId, title: "Leave Request Approved", message: "Your PAID leave request was approved by HR.", type: "LEAVE_APPROVED" as const, isRead: false },
+    { userId: adminUser.userId, title: "Monthly Payroll Generated", message: "Payroll for all 10 employees processed for current cycle.", type: "SYSTEM" as const, isRead: true },
+  ];
+
+  for (const n of sampleNotifications) {
+    await prisma.notification.create({ data: n });
+  }
+  console.log(`\n🔔 Seeded ${sampleNotifications.length} sample notifications.`);
 
   console.log("\n✅ Seed completed successfully!");
 }
