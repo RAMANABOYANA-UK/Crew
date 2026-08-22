@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  HR
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+}
+
+enum LeaveType {
+  PAID
+  SICK
+  UNPAID
+  CASUAL
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  LEAVE_SUBMITTED
+  LEAVE_APPROVED
+  LEAVE_REJECTED
+  SYSTEM
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ─── P2 Models (Auth / Profile / Core) ──────────────────
+
+model User {
+  id                 String         @id @default(cuid())
+  loginId            String?        @unique
+  email              String         @unique
+  passwordHash       String
+  role               Role           @default(EMPLOYEE)
+  mustChangePassword Boolean        @default(true)
+  isFirstLogin       Boolean        @default(true)
+  employee           Employee?
+  notifications      Notification[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+}
+
+model Employee {
+  id                 String                 @id @default(cuid())
+  userId             String?                @unique
+  user               User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  loginId            String?                @unique
+  employeeId         String?                @unique
+  firstName          String
+  lastName           String
+  email              String?
+  phone              String?
+  department         String?
+  designation        String?
+  dateOfJoining      DateTime?
+  joinDate           DateTime?
+  profilePic         String?
+  profilePicture     String?
+  role               Role                   @default(EMPLOYEE)
+  status             EmployeeStatus         @default(ACTIVE)
+
+  paidLeaveBalance   Int                    @default(12)
+  sickLeaveBalance   Int                    @default(6)
+  unpaidLeaveBalance Int                    @default(0)
+
+  basicSalary        Float                  @default(0)
+  hra                Float                  @default(0)
+  allowances         Float                  @default(0)
+
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  // Relations
+  attendances        Attendance[]
+  leaveRequests      LeaveRequest[]
+  corrections        AttendanceCorrection[]
+  jobHistory         EmployeeJobHistory[]
+  payrollAnomalies   PayrollAnomaly[]
+  payroll            Payroll?
+}
+
+// ─── P3 Models ──────────────────────────────────────────
+
+model Attendance {
+  id          String                 @id @default(cuid())
+  employeeId  String
+  employee    Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime               @db.Date
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      AttendanceStatus
+  hoursWorked Float?
+  notes       String?
+  corrections AttendanceCorrection[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@unique([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
+}
+
+model AttendanceCorrection {
+  id                String           @id @default(cuid())
+  attendanceId      String?
+  attendance        Attendance?      @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  employeeId        String
+  employee          Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date              DateTime         @db.Date
+  requestedCheckIn  DateTime?
+  requestedCheckOut DateTime?
+  reason            String
+  status            CorrectionStatus @default(PENDING)
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  adminComment      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+model EmployeeJobHistory {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  field      String   // "department" | "designation" | "status" | "role"
+  oldValue   String?
+  newValue   String?
+  reason     String
+  changedBy  String   // userId of admin
+  createdAt  DateTime @default(now())
+
+  @@index([employeeId])
+}
+
+model LeaveRequest {
+  id           String      @id @default(cuid())
+  employeeId   String
+  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  totalDays    Int
+  reason       String
+  status       LeaveStatus @default(PENDING)
+  adminComment String?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+model Payroll {
+  id                String   @id @default(cuid())
+  employeeId        String   @unique
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  wage              Float
+  basicSalary       Float
+  hra               Float
+  standardAllowance Float
+  performanceBonus  Float
+  lta               Float
+  fixedAllowance    Float
+  pfEmployee        Float
+  pfEmployer        Float
+  professionalTax   Float
+  netPayable        Float
+  payableDays       Int      @default(0)
+  totalWorkingDays  Int      @default(22)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model SalaryConfig {
+  id                   String   @id @default(cuid())
+  pfEmployeeRate       Float    @default(0.12)
+  pfEmployerRate       Float    @default(0.12)
+  professionalTax      Float    @default(200)
+  standardAllowance    Float    @default(4167)
+  performanceBonusRate Float    @default(0.0833)
+  ltaRate              Float    @default(0.0833)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      NotificationType @default(SYSTEM)
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+model PayrollAnomaly {
+  id          String          @id @default(cuid())
+  payrollId   String?
+  employeeId  String
+  employee    Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type        String?
+  ruleCode    String?
+  title       String?
+  severity    AnomalySeverity @default(MEDIUM)
+  description String
+  details     Json?
+  isResolved  Boolean         @default(false)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@index([employeeId])
+  @@index([isResolved])
+}
