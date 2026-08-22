@@ -41,7 +41,7 @@ export function Shell() {
   const activitiesQ = useQuery({ queryKey: QK.activities, queryFn: () => api.getActivities() });
 
   const logo = companyQ.data?.logo ?? null;
-  const brand = companyQ.data?.name ?? 'MBU MOHAN BABU UNIVERSITY';
+  const brand = companyQ.data?.name ?? 'CREW HRMS';
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -60,11 +60,11 @@ export function Shell() {
   }
 
   const primaryNavItems = [
-    { to: role === 'admin' ? '/employees' : '/dashboard', label: 'My Institution', icon: <Building2 size={15} /> },
-    { to: '/attendance', label: 'Attendance', icon: <Clock3 size={15} /> },
-    { to: '/time-off', label: 'Leave', icon: <Calendar size={15} /> },
-    { to: '/payroll', label: 'Billing / Payroll', icon: <Wallet size={15} /> },
-    { to: '/profile', label: 'Profile', icon: <UserRound size={15} /> },
+    { to: role === 'admin' ? '/employees' : '/dashboard', label: 'Dashboard', icon: <Building2 size={15} /> },
+    { to: '/attendance', label: 'Attendance & Time', icon: <Clock3 size={15} /> },
+    { to: '/time-off', label: 'Leaves & Time Off', icon: <Calendar size={15} /> },
+    { to: '/payroll', label: 'Payroll & Compensation', icon: <Wallet size={15} /> },
+    { to: '/profile', label: 'My Profile', icon: <UserRound size={15} /> },
   ];
 
   if (role === 'admin') {
@@ -72,29 +72,27 @@ export function Shell() {
   }
 
   const extraNavItems = [
-    { label: 'Assignments', icon: <FileText size={15} /> },
-    { label: 'Exam Schedules', icon: <Award size={15} /> },
-    { label: 'Reports', icon: <FileText size={15} /> },
-    { label: 'Assessments', icon: <CheckCircle2 size={15} /> },
-    { label: 'Holidays', icon: <Calendar size={15} /> },
-    { label: 'Timetable', icon: <Clock3 size={15} /> },
-    { label: 'Teaching Content', icon: <BookOpen size={15} /> },
-    { label: 'Services', icon: <HelpCircle size={15} /> },
-    { label: 'Clearance', icon: <ShieldCheck size={15} /> },
-    { label: 'Announcement', icon: <Megaphone size={15} /> },
-    { label: 'Projects', icon: <FolderGit2 size={15} /> },
+    { label: 'Performance Reviews', icon: <Award size={15} /> },
+    { label: 'Company Policies', icon: <FileText size={15} /> },
+    { label: 'Holiday Calendar', icon: <Calendar size={15} /> },
+    { label: 'Shift Schedules', icon: <Clock3 size={15} /> },
+    { label: 'Training & Development', icon: <BookOpen size={15} /> },
+    { label: 'Helpdesk & Support', icon: <HelpCircle size={15} /> },
+    { label: 'Compliance & Clearance', icon: <ShieldCheck size={15} /> },
+    { label: 'Company Announcements', icon: <Megaphone size={15} /> },
+    { label: 'Projects & Tasks', icon: <FolderGit2 size={15} /> },
   ];
 
   return (
     <div className="flex min-h-screen bg-[#f1f5f9]">
       <aside className="portal-sidebar hidden md:flex w-[240px] flex-col border-r border-[#e2e8f0] bg-white">
         <div className="flex items-center gap-2.5 p-3.5 border-b border-[#e2e8f0]">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#dc2626] font-bold text-white shadow-sm flex-shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#6d4aff] font-bold text-white shadow-sm flex-shrink-0">
             {logo ? <img src={logo} alt="" className="h-7 w-7 object-contain" /> : <Building2 size={20} />}
           </div>
           <div className="flex flex-col">
-            <span className="text-[13px] font-black leading-tight tracking-tight text-[#b91c1c]">MBU</span>
-            <span className="text-[10px] font-bold tracking-tight text-[#475569] uppercase leading-none">MOHAN BABU UNIVERSITY</span>
+            <span className="text-[13px] font-black leading-tight tracking-tight text-[#432db5]">CREW HRMS</span>
+            <span className="text-[10px] font-bold tracking-tight text-[#64748b] uppercase leading-none">{company?.name || 'ENTERPRISE PORTAL'}</span>
           </div>
         </div>
 
@@ -102,7 +100,7 @@ export function Shell() {
           <div className="relative flex items-center">
             <input
               type="text"
-              placeholder="Search"
+              placeholder="Search directory..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded border border-[#cbd5e1] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0284c7] focus:bg-white focus:outline-none"
@@ -113,7 +111,7 @@ export function Shell() {
 
         <div className="px-3 pt-3 pb-1">
           <div className="w-full rounded bg-[#f8fafc] border border-[#e2e8f0] py-1.5 px-3 text-left text-[12px] font-semibold text-[#0369a1] flex items-center gap-2">
-            <BookOpen size={13} className="text-[#0284c7]" /> My Learning
+            <BookOpen size={13} className="text-[#0284c7]" /> Employee Workspace
           </div>
         </div>
 
@@ -137,7 +135,7 @@ export function Shell() {
             <div
               key={idx}
               className="flex items-center gap-2.5 px-3 py-2 rounded text-[12.5px] font-medium text-[#475569] hover:bg-[#f1f5f9] opacity-75 hover:opacity-100 cursor-pointer"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate(it.label.includes('Leave') ? '/time-off' : '/dashboard')}
             >
               {it.icon}
               {it.label}
@@ -156,8 +154,8 @@ export function Shell() {
               {mobileOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
             <div className="flex items-center gap-2 text-xs font-semibold text-[#475569]">
-              <span className="rounded bg-[#f1f5f9] px-2 py-1 text-[#0369a1] border border-[#e2e8f0]">
-                V-Semester | 2026-2027
+              <span className="rounded bg-[#f1f5f9] px-2.5 py-1 text-[#0369a1] border border-[#e2e8f0]">
+                FY 2026-2027 · {role === 'admin' ? 'HR Administration' : 'Full-Time Employee'}
               </span>
             </div>
           </div>

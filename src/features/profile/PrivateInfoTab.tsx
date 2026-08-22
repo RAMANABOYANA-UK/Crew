@@ -140,14 +140,14 @@ export function PrivateInfoTab({ employee, readOnly }: { employee: Employee; rea
         /* Read-Only Portal Table View (matching reference image) */
         <div className="flex flex-col space-y-1">
           <PortalRow label="Title" value={draft.title} />
-          <PortalRow label="First Name" value={`${employee.firstName} ${employee.lastName}`} />
-          <PortalRow label="Last Name" value="" />
-          <PortalRow label="DOB" value={formatDisplayDate(draft.dob)} />
-          <PortalRow label="Age" value={String(age)} />
+          <PortalRow label="First Name" value={employee.firstName} />
+          <PortalRow label="Last Name" value={employee.lastName} />
+          <PortalRow label="Date of Birth" value={formatDisplayDate(draft.dob)} />
+          <PortalRow label="Age" value={`${age} Years`} />
           <PortalRow label="Gender" value={draft.gender} />
-          <PortalRow label="Father's Name" value={draft.fatherName} />
-          <PortalRow label="Mother's Name" value={draft.motherName} />
-          <PortalRow label="Address" value={`${draft.address}, ${draft.city}, ${draft.city}, ${draft.state}, IN`} />
+          <PortalRow label="Emergency Contact (Father)" value={draft.fatherName} />
+          <PortalRow label="Emergency Contact (Mother)" value={draft.motherName} />
+          <PortalRow label="Permanent Address" value={`${draft.address}, ${draft.city}, ${draft.state}, India`} />
           <PortalRow label="City" value={draft.city} />
           <PortalRow label="State" value={draft.state} />
         </div>
