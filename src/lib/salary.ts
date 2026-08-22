@@ -1,17 +1,90 @@
-/**
- * Salary Computation Engine
- * 
- * Implements the full salary formula chain:
- * - Basic Salary = 50% of Wage
- * - HRA = 50% of Basic
- * - Standard Allowance = configurable (default ₹4,167/month)
- * - Performance Bonus = configurable % of Basic (default 8.33%)
- * - LTA = configurable % of Basic (default 8.33%)
- * - Fixed Allowance = Wage − sum of all other components (balancing figure)
- * - PF Employee = configurable % of Basic (default 12%)
- * - PF Employer = configurable % of Basic (default 12%)
- * - Professional Tax = configurable flat amount (default ₹200/month)
- */
+import type { SalaryComponentRow, SalaryRates, SalaryBreakdown as UISalaryBreakdown } from '@/types';
+
+// =============================================================
+// Frontend UI Salary Constants & Functions
+// =============================================================
+
+export const DEFAULT_SALARY_RATES: SalaryRates = {
+  basicPct: 50,
+  hraPctOfBasic: 50,
+  standardPct: 4,
+  performancePct: 9.33,
+  ltaPct: 8.33,
+  pfEmployeePct: 12,
+  pfEmployerPct: 12,
+  professionalTax: 200,
+};
+
+export function roundMO(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export function defaultBreakdownRows(rates: SalaryRates = DEFAULT_SALARY_RATES): SalaryComponentRow[] {
+  return [
+    { key: 'basic', rule: 'percent-wage', label: 'Basic Salary', ratePct: rates.basicPct, fixedAmount: 0, note: 'Base for other %-based components' },
+    { key: 'hra', rule: 'percent-basic', label: 'House Rent Allowance (HRA)', ratePct: rates.hraPctOfBasic, fixedAmount: 0, note: '50% of Basic' },
+    { key: 'standard', rule: 'percent-wage', label: 'Standard Allowance', ratePct: rates.standardPct, fixedAmount: 0 },
+    { key: 'performance', rule: 'percent-wage', label: 'Performance Bonus', ratePct: rates.performancePct, fixedAmount: 0 },
+    { key: 'lta', rule: 'percent-wage', label: 'Leave Travel Allowance', ratePct: rates.ltaPct, fixedAmount: 0 },
+    { key: 'fixed', rule: 'balancing', label: 'Fixed Allowance', ratePct: 0, fixedAmount: 0, note: 'Auto-calculated balancing amount' },
+  ];
+}
+
+export function computeSalary(
+  wageMonthly: number,
+  rows: SalaryComponentRow[],
+  pfEmployeePct: number,
+  pfEmployerPct: number,
+  professionalTax: number,
+): UISalaryBreakdown {
+  const withAmts: SalaryComponentRow[] = rows.map((r) => {
+    if (r.rule === 'percent-wage') {
+      return { ...r, fixedAmount: roundMO((wageMonthly * r.ratePct) / 100) };
+    }
+    if (r.rule === 'percent-basic') {
+      const basicPct = rows.find((x) => x.key === 'basic')?.ratePct ?? 0;
+      return { ...r, fixedAmount: roundMO((wageMonthly * (basicPct / 100) * r.ratePct) / 100) };
+    }
+    return { ...r };
+  });
+
+  const fixedRows = withAmts.filter((r) => r.rule !== 'balancing');
+  const fixedSum = roundMO(fixedRows.reduce((s, r) => s + r.fixedAmount, 0));
+  const overWage = fixedSum > wageMonthly;
+
+  const balanced = withAmts.map((r) => {
+    if (r.rule !== 'balancing') return r;
+    return { ...r, fixedAmount: overWage ? 0 : roundMO(wageMonthly - fixedSum) };
+  });
+
+  const totalComponents = roundMO(balanced.reduce((s, r) => s + r.fixedAmount, 0));
+  const pfEmployee = roundMO((wageMonthly * pfEmployeePct) / 100);
+  const pfEmployer = roundMO((wageMonthly * pfEmployerPct) / 100);
+  const grossMonthly = totalComponents;
+  const monthlyDeductions = roundMO(pfEmployee + professionalTax);
+  const netMonthly = roundMO(grossMonthly - monthlyDeductions);
+
+  return {
+    rows: balanced,
+    totalComponents,
+    overWage,
+    pfEmployee,
+    pfEmployer,
+    professionalTax,
+    grossMonthly,
+    monthlyDeductions,
+    netMonthly,
+    yearlyNet: netMonthly * 12,
+  };
+}
+
+export function initRates(patch: Partial<SalaryRates> = {}): SalaryRates {
+  return { ...DEFAULT_SALARY_RATES, ...patch };
+}
+
+// =============================================================
+// Backend Calculation Engine & Models
+// =============================================================
 
 export interface SalaryConfigInput {
   pfEmployeeRate: number;   // e.g. 0.12 for 12%
@@ -22,7 +95,7 @@ export interface SalaryConfigInput {
   ltaRate: number;           // e.g. 0.0833 for 8.33%
 }
 
-export interface SalaryBreakdown {
+export interface BackendSalaryBreakdown {
   wage: number;
   basicSalary: number;
   hra: number;
@@ -47,25 +120,16 @@ export const DEFAULT_SALARY_CONFIG: SalaryConfigInput = {
   ltaRate: 0.0833,
 };
 
-/**
- * Compute the full salary breakdown from a wage amount.
- * 
- * @param wage - The total CTC / wage amount
- * @param config - Configurable rates (PF, tax, allowances)
- * @returns Full salary breakdown with all components
- * @throws Error if fixedAllowance would be negative (wage too low for components)
- */
 export function computeSalaryBreakdown(
   wage: number,
   config: SalaryConfigInput = DEFAULT_SALARY_CONFIG
-): SalaryBreakdown {
+): BackendSalaryBreakdown {
   const basicSalary = round(wage * 0.5);
   const hra = round(basicSalary * 0.5);
   const standardAllowance = round(config.standardAllowance);
   const performanceBonus = round(basicSalary * config.performanceBonusRate);
   const lta = round(basicSalary * config.ltaRate);
 
-  // Fixed Allowance is the balancing figure
   const otherComponentsSum = basicSalary + hra + standardAllowance + performanceBonus + lta;
   const fixedAllowance = round(wage - otherComponentsSum);
 
@@ -76,7 +140,6 @@ export function computeSalaryBreakdown(
     );
   }
 
-  // Validate: total components must equal wage
   const grossSalary = basicSalary + hra + standardAllowance + performanceBonus + lta + fixedAllowance;
   if (Math.abs(grossSalary - wage) > 0.01) {
     throw new Error(
@@ -84,7 +147,6 @@ export function computeSalaryBreakdown(
     );
   }
 
-  // Deductions
   const pfEmployee = round(basicSalary * config.pfEmployeeRate);
   const pfEmployer = round(basicSalary * config.pfEmployerRate);
   const professionalTax = round(config.professionalTax);
@@ -109,16 +171,8 @@ export function computeSalaryBreakdown(
   };
 }
 
-/**
- * Compute prorated net payable based on attendance.
- * 
- * @param breakdown - Full salary breakdown
- * @param payableDays - Days the employee actually worked / was on paid leave
- * @param totalWorkingDays - Total working days in the pay period
- * @returns Prorated net payable amount
- */
 export function computeProratedPayroll(
-  breakdown: SalaryBreakdown,
+  breakdown: BackendSalaryBreakdown,
   payableDays: number,
   totalWorkingDays: number
 ): number {
@@ -128,15 +182,12 @@ export function computeProratedPayroll(
   const ratio = payableDays / totalWorkingDays;
   const proratedGross = round(breakdown.grossSalary * ratio);
   const proratedPf = round(breakdown.pfEmployee * ratio);
-  const proratedTax = round(breakdown.professionalTax); // Professional tax is flat, not prorated
+  const proratedTax = round(breakdown.professionalTax);
   const proratedNet = round(proratedGross - proratedPf - proratedTax);
 
   return Math.max(0, proratedNet);
 }
 
-/**
- * Round to 2 decimal places.
- */
 function round(value: number): number {
   return Math.round(value * 100) / 100;
 }
