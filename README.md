@@ -8,15 +8,6 @@ This repo currently contains the **product spec and frontend build prompt** used
 
 ---
 
-## 📄 Contents
-
-| File | Purpose |
-|---|---|
-| `Crew-HRMS-Frontend-Prompt.md` | The complete frontend build brief — design system, every screen/module broken down field-by-field, business rules, role permissions, and folder structure. Paste this into Antigravity to generate the UI. |
-| `README.md` | This file — project orientation. |
-
----
-
 ## 🧭 What Crew Does
 
 | Module | Summary |
