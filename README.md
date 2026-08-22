@@ -257,14 +257,7 @@ But the core is already solid: real auth, real database, real workflows.
 
 ---
 
-## Team
 
-Built during a hackathon by the Crew team — with a focus on making the backend trustworthy first, then making the experience feel clean.
-
-If something breaks, it’s probably the database URL.  
-It always is.
-
----
 
 ## Final note
 
