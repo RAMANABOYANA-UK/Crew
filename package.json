@@ -8,7 +8,7 @@
     "build": "next build",
     "build:frontend": "npm --prefix frontend run build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint src",
     "seed": "tsx prisma/seed.ts",
     "test": "tsx scripts/test-backend.ts"
   },

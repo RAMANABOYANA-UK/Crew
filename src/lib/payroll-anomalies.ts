@@ -40,10 +40,6 @@ export async function scanPayrollAnomalies(targetEmployeeId?: string): Promise<D
     },
   });
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
   for (const p of payrolls) {
     const name = `${p.employee.firstName} ${p.employee.lastName}`;
 

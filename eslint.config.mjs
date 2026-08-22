@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Generated Prisma client:
     "src/generated/**",
+    // The standalone Vite frontend has its own TypeScript project and lint setup.
+    "frontend/**",
   ]),
 ]);
 
