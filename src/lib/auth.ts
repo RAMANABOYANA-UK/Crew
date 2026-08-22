@@ -1,11 +1,8 @@
 /**
- * Auth & Token Helpers for Dayflow HRMS
- *
- * Supports both Clerk authentication and standard JWT/bcrypt credentials (pure Prisma).
+ * Pure JWT & Bcrypt Auth Helpers for Dayflow HRMS
  */
 
 import { cookies, headers } from "next/headers";
-import { auth, currentUser } from "@clerk/nextjs/server";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
@@ -14,7 +11,6 @@ import { prisma } from "./prisma";
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
-  process.env.CLERK_SECRET_KEY ||
   "dayflow-hrms-jwt-secret-2026-key";
 const COOKIE_NAME = "dayflow_token";
 
@@ -72,10 +68,9 @@ export function comparePassword(password: string, hash: string): boolean {
 // ─── User & Employee Resolution ────────────────────
 
 /**
- * Resolves current User (JWT token first, Clerk fallback second)
+ * Resolves current User from JWT Token
  */
 export async function getCurrentUser() {
-  // 1. Try JWT Auth
   const token = await getAuthToken();
   if (token) {
     const payload = verifyToken(token);
@@ -87,45 +82,16 @@ export async function getCurrentUser() {
       if (user) return user;
     }
   }
-
-  // 2. Try Clerk Auth fallback
-  try {
-    const { userId } = await auth();
-    if (userId) {
-      return prisma.user.findUnique({
-        where: { clerkId: userId },
-        include: { employee: true },
-      });
-    }
-  } catch {
-    // Clerk not configured or error
-  }
-
   return null;
 }
 
 /**
- * Resolves current Employee (Clerk auth first, JWT token fallback second)
+ * Resolves current Employee from JWT Token
  */
 export async function getCurrentEmployee() {
-  // 1. Try Clerk Auth
-  try {
-    const { userId } = await auth();
-    if (userId) {
-      const user = await prisma.user.findFirst({
-        where: { OR: [{ clerkId: userId }, { id: userId }] },
-        include: { employee: true },
-      });
-      if (user?.employee) return { ...user.employee, user };
-    }
-  } catch {
-    // Clerk not configured or error
-  }
-
-  // 2. Try JWT Token Auth
   const user = await getCurrentUser();
   if (user?.employee) {
-    return user.employee;
+    return { ...user.employee, user };
   }
   if (user) {
     const employee = await prisma.employee.findFirst({
@@ -138,9 +104,8 @@ export async function getCurrentEmployee() {
       },
       include: { user: true },
     });
-    if (employee) return employee;
+    if (employee) return { ...employee, user };
   }
-
   return null;
 }
 
@@ -179,54 +144,3 @@ export async function requireRole(allowedRoles: string | string[]) {
   }
   return user;
 }
-
-export async function syncEmployee() {
-  const clerkUser = await currentUser();
-  if (!clerkUser) return null;
-
-  const email = clerkUser.emailAddresses[0]?.emailAddress;
-  if (!email) return null;
-
-  let user = await prisma.user.findFirst({
-    where: { OR: [{ clerkId: clerkUser.id }, { email }] },
-    include: { employee: true },
-  });
-
-  if (!user) {
-    const firstName = clerkUser.firstName || "New";
-    const lastName = clerkUser.lastName || "User";
-    const year = new Date().getFullYear();
-    const random = Math.floor(1000 + Math.random() * 9000);
-
-    const loginId = `OI${firstName.slice(0, 2).toUpperCase()}${lastName
-      .slice(0, 2)
-      .toUpperCase()}${year}${random}`;
-    const employeeId = `EMP${Date.now().toString().slice(-4)}`;
-
-    user = await prisma.user.create({
-      data: {
-        clerkId: clerkUser.id,
-        email,
-        loginId,
-        role: "EMPLOYEE",
-        mustChangePassword: false,
-        employee: {
-          create: {
-            loginId,
-            employeeId,
-            email,
-            firstName,
-            lastName,
-            status: "ACTIVE",
-            joinDate: new Date(),
-          },
-        },
-      },
-      include: { employee: true },
-    });
-  }
-
-  return user?.employee || null;
-}
-
-export const syncUser = syncEmployee;
