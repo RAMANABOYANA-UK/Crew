@@ -31,18 +31,27 @@ export async function GET() {
     const totalNetPayable = payrolls.reduce((sum, p) => sum + p.netPayable, 0);
 
     return NextResponse.json({
-      payrolls,
-      summary: {
-        totalEmployees: payrolls.length,
-        totalWageExpense,
-        totalNetPayable,
+      success: true,
+      data: {
+        payrolls,
+        summary: {
+          totalEmployees: payrolls.length,
+          totalWageExpense,
+          totalNetPayable,
+        },
       },
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("All payroll fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

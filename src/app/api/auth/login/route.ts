@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Validation failed",
-          details: parsed.error.issues,
+          message: "Validation failed",
+          data: parsed.error.issues,
         },
         { status: 400 }
       );
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid username/Login ID or password.",
+          message: "Invalid username/Login ID or password.",
         },
         { status: 401 }
       );
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Invalid username/Login ID or password.",
+          message: "Invalid username/Login ID or password.",
         },
         { status: 401 }
       );
@@ -69,25 +69,27 @@ export async function POST(req: NextRequest) {
       message: user.mustChangePassword
         ? "Login successful. You must change your temporary password before accessing the system."
         : "Login successful.",
-      token,
-      mustChangePassword: user.mustChangePassword,
-      isFirstLogin: user.isFirstLogin,
-      user: {
-        id: user.id,
-        loginId: user.loginId,
-        email: user.email,
-        role: user.role,
+      data: {
+        token,
         mustChangePassword: user.mustChangePassword,
-        employee: user.employee
-          ? {
-              id: user.employee.id,
-              firstName: user.employee.firstName,
-              lastName: user.employee.lastName,
-              department: user.employee.department,
-              designation: user.employee.designation,
-              employeeId: user.employee.employeeId,
-            }
-          : null,
+        isFirstLogin: user.isFirstLogin,
+        user: {
+          id: user.id,
+          loginId: user.loginId,
+          email: user.email,
+          role: user.role,
+          mustChangePassword: user.mustChangePassword,
+          employee: user.employee
+            ? {
+                id: user.employee.id,
+                firstName: user.employee.firstName,
+                lastName: user.employee.lastName,
+                department: user.employee.department,
+                designation: user.employee.designation,
+                employeeId: user.employee.employeeId,
+              }
+            : null,
+        },
       },
     });
 
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(
-      { success: false, error: "Internal server error during login" },
+      { success: false, message: "Internal server error during login" },
       { status: 500 }
     );
   }

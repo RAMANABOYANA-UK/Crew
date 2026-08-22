@@ -9,7 +9,10 @@ export async function GET() {
   try {
     const employee = await getCurrentEmployee();
     if (!employee) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const payroll = await prisma.payroll.findUnique({
@@ -18,7 +21,7 @@ export async function GET() {
 
     if (!payroll) {
       return NextResponse.json(
-        { error: "Payroll record not found. Contact your administrator." },
+        { success: false, message: "Payroll record not found. Contact your administrator." },
         { status: 404 }
       );
     }
@@ -86,25 +89,30 @@ export async function GET() {
     );
 
     return NextResponse.json({
-      payroll: {
-        ...payroll,
-        payableDays: Math.round(payableDays),
-        totalWorkingDays,
-        proratedNetPayable: proratedNet,
-      },
-      breakdown,
-      attendanceSummary: {
-        present: attendances.filter((a) => a.status === "PRESENT").length,
-        halfDay: attendances.filter((a) => a.status === "HALF_DAY").length,
-        onLeave: attendances.filter((a) => a.status === "ON_LEAVE").length,
-        absent: attendances.filter((a) => a.status === "ABSENT").length,
-        payableDays: Math.round(payableDays),
-        totalWorkingDays,
+      success: true,
+      data: {
+        payroll: {
+          ...payroll,
+          payableDays: Math.round(payableDays),
+          totalWorkingDays,
+          proratedNetPayable: proratedNet,
+        },
+        breakdown,
+        attendanceSummary: {
+          present: attendances.filter((a) => a.status === "PRESENT").length,
+          halfDay: attendances.filter((a) => a.status === "HALF_DAY").length,
+          onLeave: attendances.filter((a) => a.status === "ON_LEAVE").length,
+          absent: attendances.filter((a) => a.status === "ABSENT").length,
+          payableDays: Math.round(payableDays),
+          totalWorkingDays,
+        },
       },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Payroll fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

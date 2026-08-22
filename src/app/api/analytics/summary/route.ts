@@ -159,10 +159,9 @@ export async function GET() {
       },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Analytics summary error:", error);
     return NextResponse.json(
-      { success: false, error: "Internal server error" },
+      { success: false, message: "Internal server error" },
       { status: 500 }
     );
   }

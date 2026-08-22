@@ -17,7 +17,11 @@ export async function PATCH(
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.issues },
+        {
+          success: false,
+          message: "Validation failed",
+          data: parsed.error.issues,
+        },
         { status: 400 }
       );
     }
@@ -31,7 +35,7 @@ export async function PATCH(
 
     if (!leaveRequest) {
       return NextResponse.json(
-        { error: "Leave request not found." },
+        { success: false, message: "Leave request not found." },
         { status: 404 }
       );
     }
@@ -39,8 +43,9 @@ export async function PATCH(
     if (leaveRequest.status !== "PENDING") {
       return NextResponse.json(
         {
-          error: `Leave request has already been ${leaveRequest.status.toLowerCase()}.`,
-          leaveRequest,
+          success: false,
+          message: `Leave request has already been ${leaveRequest.status.toLowerCase()}.`,
+          data: leaveRequest,
         },
         { status: 409 }
       );
@@ -52,7 +57,7 @@ export async function PATCH(
       data: {
         status,
         adminComment: adminComment || null,
-        reviewedBy: admin.clerkUserId,
+        reviewedBy: admin.employee?.clerkUserId || admin.id,
         reviewedAt: new Date(),
       },
       include: {
@@ -69,20 +74,22 @@ export async function PATCH(
     });
 
     // Notify the employee about the review decision
-    try {
-      const { createNotification } = await import("@/lib/notifications");
-      await createNotification({
-        userId: updated.employee.userId,
-        userEmail: updated.employee.email || undefined,
-        title: `Leave Request ${status}`,
-        message: `Your ${leaveRequest.leaveType} leave request (${leaveRequest.totalDays} day(s)) has been ${status.toLowerCase()}.${adminComment ? ` Reviewer note: "${adminComment}"` : ""}`,
-        type: status === "APPROVED" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
-        link: `/dashboard/leave`,
-        emailSubject: `[Dayflow HRMS] Leave Request ${status}: ${leaveRequest.leaveType}`,
-        emailText: `Hello ${updated.employee.firstName},\n\nYour ${leaveRequest.leaveType} leave request for ${leaveRequest.totalDays} day(s) has been ${status.toLowerCase()}.${adminComment ? `\n\nReviewer Comment: ${adminComment}` : ""}\n\nRegards,\nDayflow HR Team`,
-      });
-    } catch (notifyErr) {
-      console.error("Failed to dispatch leave review notification to employee:", notifyErr);
+    if (updated.employee.userId) {
+      try {
+        const { createNotification } = await import("@/lib/notifications");
+        await createNotification({
+          userId: updated.employee.userId,
+          userEmail: updated.employee.email || undefined,
+          title: `Leave Request ${status}`,
+          message: `Your ${leaveRequest.leaveType} leave request (${leaveRequest.totalDays} day(s)) has been ${status.toLowerCase()}.${adminComment ? ` Reviewer note: "${adminComment}"` : ""}`,
+          type: status === "APPROVED" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
+          link: `/dashboard/leave`,
+          emailSubject: `[Dayflow HRMS] Leave Request ${status}: ${leaveRequest.leaveType}`,
+          emailText: `Hello ${updated.employee.firstName},\n\nYour ${leaveRequest.leaveType} leave request for ${leaveRequest.totalDays} day(s) has been ${status.toLowerCase()}.${adminComment ? `\n\nReviewer Comment: ${adminComment}` : ""}\n\nRegards,\nDayflow HR Team`,
+        });
+      } catch (notifyErr) {
+        console.error("Failed to dispatch leave review notification to employee:", notifyErr);
+      }
     }
 
     // If approved, create ON_LEAVE attendance records for each day in the leave period
@@ -133,14 +140,21 @@ export async function PATCH(
     }
 
     return NextResponse.json({
+      success: true,
+      data: updated,
       message: `Leave request ${status.toLowerCase()}.`,
-      leaveRequest: updated,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Leave review error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

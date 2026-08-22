@@ -5,7 +5,7 @@ export async function POST() {
   return NextResponse.json(
     {
       success: false,
-      error: "Forbidden. Public self-signup is disabled. Employee accounts can only be created by an HR or Administrator.",
+      message: "Forbidden. Public self-signup is disabled. Employee accounts can only be created by an HR or Administrator.",
     },
     { status: 403 }
   );

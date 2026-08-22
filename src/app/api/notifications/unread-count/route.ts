@@ -16,11 +16,13 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      unreadCount,
+      data: { unreadCount },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Fetch unread count error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

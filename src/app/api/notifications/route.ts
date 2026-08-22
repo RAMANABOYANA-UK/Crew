@@ -41,9 +41,11 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Fetch notifications error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -80,13 +82,17 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `${updateResult.count} notification(s) marked as read.`,
-      updatedCount: updateResult.count,
-      unreadCount,
+      data: {
+        updatedCount: updateResult.count,
+        unreadCount,
+      },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Mark notifications read error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -109,12 +115,16 @@ export async function DELETE() {
     return NextResponse.json({
       success: true,
       message: `${deleteResult.count} read notification(s) deleted.`,
-      deletedCount: deleteResult.count,
-      unreadCount,
+      data: {
+        deletedCount: deleteResult.count,
+        unreadCount,
+      },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Delete notifications error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

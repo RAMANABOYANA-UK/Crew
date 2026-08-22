@@ -10,6 +10,12 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 export async function POST(req: NextRequest) {
   try {
     const employee = await getCurrentEmployee();
+    if (!employee) {
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
     const contentType = req.headers.get("content-type") || "";
 
@@ -23,7 +29,7 @@ export async function POST(req: NextRequest) {
 
       if (!file) {
         return NextResponse.json(
-          { success: false, error: "No file uploaded. Please include 'file' in form data." },
+          { success: false, message: "No file uploaded. Please include 'file' in form data." },
           { status: 400 }
         );
       }
@@ -32,7 +38,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: `Invalid file type: ${file.type}. Allowed formats: JPEG, PNG, WebP, GIF.`,
+            message: `Invalid file type: ${file.type}. Allowed formats: JPEG, PNG, WebP, GIF.`,
           },
           { status: 400 }
         );
@@ -42,7 +48,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: `File size exceeds 5MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB).`,
+            message: `File size exceeds 5MB limit (${(file.size / 1024 / 1024).toFixed(2)}MB).`,
           },
           { status: 400 }
         );
@@ -60,7 +66,7 @@ export async function POST(req: NextRequest) {
 
       if (!imageBase64) {
         return NextResponse.json(
-          { success: false, error: "Missing imageBase64 in request body." },
+          { success: false, message: "Missing imageBase64 in request body." },
           { status: 400 }
         );
       }
@@ -70,7 +76,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: `Invalid mime type: ${mimeType}. Allowed formats: JPEG, PNG, WebP, GIF.`,
+            message: `Invalid mime type: ${mimeType}. Allowed formats: JPEG, PNG, WebP, GIF.`,
           },
           { status: 400 }
         );
@@ -84,7 +90,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: `Image exceeds 5MB size limit.`,
+            message: `Image exceeds 5MB size limit.`,
           },
           { status: 400 }
         );
@@ -108,7 +114,7 @@ export async function POST(req: NextRequest) {
     // Update employee record
     const updatedEmployee = await prisma.employee.update({
       where: { id: employee.id },
-      data: { profilePic: publicUrl },
+      data: { profilePic: publicUrl, profilePicture: publicUrl },
       include: {
         user: {
           select: {
@@ -124,14 +130,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Profile picture uploaded and updated successfully.",
-      url: publicUrl,
-      employee: updatedEmployee,
+      data: {
+        url: publicUrl,
+        employee: updatedEmployee,
+      },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Profile picture upload error:", error);
     return NextResponse.json(
-      { success: false, error: "Internal server error during image upload" },
+      { success: false, message: "Internal server error during image upload" },
       { status: 500 }
     );
   }

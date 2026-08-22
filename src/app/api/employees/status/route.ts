@@ -49,10 +49,6 @@ export async function GET() {
       const attendance = attendanceMap.get(emp.id);
       const leave = leaveMap.get(emp.id);
 
-      // Status dot logic:
-      // 🟢 green = present today (has check-in)
-      // ✈️ plane = on approved leave
-      // 🟡 yellow = absent (no check-in, no approved leave)
       let statusDot: "green" | "plane" | "yellow";
       let statusEmoji: string;
       let statusLabel: string;
@@ -95,12 +91,21 @@ export async function GET() {
       absent: statuses.filter((s) => s.statusDot === "yellow").length,
     };
 
-    return NextResponse.json({ employees: statuses, summary });
+    return NextResponse.json({
+      success: true,
+      data: { employees: statuses, summary },
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Employee status error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

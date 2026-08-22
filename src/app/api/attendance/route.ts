@@ -7,7 +7,10 @@ export async function GET(request: NextRequest) {
   try {
     const employee = await getCurrentEmployee();
     if (!employee) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -50,10 +53,15 @@ export async function GET(request: NextRequest) {
       ),
     };
 
-    return NextResponse.json({ attendances, summary });
+    return NextResponse.json({
+      success: true,
+      data: { attendances, summary },
+    });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Attendance fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

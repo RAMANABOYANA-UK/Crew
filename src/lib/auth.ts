@@ -1,9 +1,7 @@
 /**
  * Auth & Token Helpers for Dayflow HRMS
  *
- * Primary flow: Clerk authentication mapped directly to Employee.clerkUserId (Prisma-only).
- * Retained utilities: JWT/bcrypt helpers used by the credential-based onboarding
- * and first-login password change workflow.
+ * Supports both Clerk authentication and standard JWT/bcrypt credentials (pure Prisma).
  */
 
 import { cookies, headers } from "next/headers";
@@ -12,31 +10,171 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { prisma } from "./prisma";
 
-// ─── Clerk-based helpers (canonical) ────────────────────
+// ─── JWT / Password Utilities ────────────────────
 
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  process.env.CLERK_SECRET_KEY ||
+  "dayflow-hrms-jwt-secret-2026-key";
+const COOKIE_NAME = "dayflow_token";
+
+export interface JWTPayload {
+  userId: string;
+  loginId: string;
+  email: string;
+  role: string;
+  employeeId?: string;
+  mustChangePassword?: boolean;
+}
+
+export function generateToken(payload: JWTPayload): string {
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+}
+
+export function verifyToken(token: string): JWTPayload | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+  } catch {
+    return null;
+  }
+}
+
+export async function getAuthToken(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
+    if (token) return token;
+  } catch {
+    // Cookies not available
+  }
+
+  try {
+    const headerStore = await headers();
+    const authHeader = headerStore.get("authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      return authHeader.substring(7);
+    }
+  } catch {
+    // Headers not available
+  }
+
+  return null;
+}
+
+export function hashPassword(password: string): string {
+  return bcrypt.hashSync(password, 10);
+}
+
+export function comparePassword(password: string, hash: string): boolean {
+  return bcrypt.compareSync(password, hash);
+}
+
+// ─── User & Employee Resolution ────────────────────
+
+/**
+ * Resolves current User (JWT token first, Clerk fallback second)
+ */
+export async function getCurrentUser() {
+  // 1. Try JWT Auth
+  const token = await getAuthToken();
+  if (token) {
+    const payload = verifyToken(token);
+    if (payload?.userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        include: { employee: true },
+      });
+      if (user) return user;
+    }
+  }
+
+  // 2. Try Clerk Auth fallback
+  try {
+    const { userId } = await auth();
+    if (userId) {
+      return prisma.user.findUnique({
+        where: { clerkId: userId },
+        include: { employee: true },
+      });
+    }
+  } catch {
+    // Clerk not configured or error
+  }
+
+  return null;
+}
+
+/**
+ * Resolves current Employee (Clerk auth first, JWT token fallback second)
+ */
 export async function getCurrentEmployee() {
-  const { userId } = await auth();
-  if (!userId) return null;
+  // 1. Try Clerk Auth
+  try {
+    const { userId } = await auth();
+    if (userId) {
+      const employee = await prisma.employee.findUnique({
+        where: { clerkUserId: userId },
+        include: { user: true },
+      });
+      if (employee) return employee;
+    }
+  } catch {
+    // Clerk not configured or error
+  }
 
-  return prisma.employee.findUnique({
-    where: { clerkUserId: userId },
-  });
+  // 2. Try JWT Token Auth
+  const user = await getCurrentUser();
+  if (user?.employee) {
+    return user.employee;
+  }
+  if (user) {
+    const employee = await prisma.employee.findFirst({
+      where: {
+        OR: [
+          { userId: user.id },
+          { email: user.email },
+          ...(user.loginId ? [{ loginId: user.loginId }] : []),
+        ],
+      },
+      include: { user: true },
+    });
+    if (employee) return employee;
+  }
+
+  return null;
 }
 
 export async function requireAuth() {
+  const user = await getCurrentUser();
   const employee = await getCurrentEmployee();
-  if (!employee) {
+
+  if (!user && !employee) {
     throw new Error("Unauthorized");
   }
-  return employee;
+
+  return {
+    ...(user || {}),
+    user: user || undefined,
+    employee: employee || user?.employee || null,
+    role: employee?.role || user?.role || "EMPLOYEE",
+  };
 }
 
 export async function requireAdmin() {
-  const employee = await requireAuth();
-  if (employee.role !== "ADMIN" && employee.role !== "HR") {
+  const user = await requireAuth();
+  if (user.role !== "ADMIN" && user.role !== "HR") {
     throw new Error("Forbidden");
   }
-  return employee;
+  return user;
+}
+
+export async function requireRole(allowedRoles: string | string[]) {
+  const user = await requireAuth();
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  if (!roles.includes(user.role)) {
+    throw new Error("Forbidden");
+  }
+  return user;
 }
 
 export async function syncEmployee() {
@@ -72,6 +210,7 @@ export async function syncEmployee() {
         role: "EMPLOYEE",
         status: "ACTIVE",
         dateOfJoining: new Date(),
+        joinDate: new Date(),
       },
     });
   }
@@ -79,100 +218,4 @@ export async function syncEmployee() {
   return employee;
 }
 
-// Alias
 export const syncUser = syncEmployee;
-
-// ─── JWT / password utilities (credential onboarding) ───
-
-const JWT_SECRET =
-  process.env.JWT_SECRET ||
-  process.env.CLERK_SECRET_KEY ||
-  "dayflow-hrms-jwt-secret-2026-key";
-const COOKIE_NAME = "dayflow_token";
-
-export interface JWTPayload {
-  userId: string;
-  loginId: string;
-  email: string;
-  role: string;
-  employeeId?: string;
-  mustChangePassword?: boolean;
-}
-
-export function generateToken(payload: JWTPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
-}
-
-export function verifyToken(token: string): JWTPayload | null {
-  try {
-    return jwt.verify(token, JWT_SECRET) as JWTPayload;
-  } catch {
-    return null;
-  }
-}
-
-export async function getAuthToken(): Promise<string | null> {
-  // 1. Check cookies
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(COOKIE_NAME)?.value;
-    if (token) return token;
-  } catch {
-    // Cookies may not be accessible in all contexts
-  }
-
-  // 2. Check Authorization header
-  try {
-    const headerStore = await headers();
-    const authHeader = headerStore.get("authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      return authHeader.substring(7);
-    }
-  } catch {
-    // Headers may not be accessible in all contexts
-  }
-
-  return null;
-}
-
-export function hashPassword(password: string): string {
-  return bcrypt.hashSync(password, 10);
-}
-
-export function comparePassword(password: string, hash: string): boolean {
-  return bcrypt.compareSync(password, hash);
-}
-
-/**
- * Resolve the credential-based User account (JWT cookie/header first,
- * Clerk fallback second). Used by the password onboarding workflow.
- */
-export async function getCurrentUser() {
-  // 1. Try JWT Auth
-  const token = await getAuthToken();
-  if (token) {
-    const payload = verifyToken(token);
-    if (payload?.userId) {
-      const user = await prisma.user.findUnique({
-        where: { id: payload.userId },
-        include: { employee: true },
-      });
-      if (user) return user;
-    }
-  }
-
-  // 2. Try Clerk Auth fallback
-  try {
-    const { userId } = await auth();
-    if (userId) {
-      return prisma.user.findUnique({
-        where: { clerkId: userId },
-        include: { employee: true },
-      });
-    }
-  } catch {
-    // Clerk not configured or in testing environment
-  }
-
-  return null;
-}

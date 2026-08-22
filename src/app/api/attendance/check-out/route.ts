@@ -7,7 +7,10 @@ export async function POST(request: NextRequest) {
   try {
     const employee = await getCurrentEmployee();
     if (!employee) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const now = new Date();
@@ -24,14 +27,18 @@ export async function POST(request: NextRequest) {
 
     if (!attendance) {
       return NextResponse.json(
-        { error: "No check-in found for today. Please check in first." },
+        { success: false, message: "No check-in found for today. Please check in first." },
         { status: 404 }
       );
     }
 
     if (attendance.checkOut) {
       return NextResponse.json(
-        { error: "Already checked out today.", attendance },
+        {
+          success: false,
+          message: "Already checked out today.",
+          data: attendance,
+        },
         { status: 409 }
       );
     }
@@ -55,12 +62,15 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
+      success: true,
+      data: updated,
       message: "Checked out successfully.",
-      attendance: updated,
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Check-out error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

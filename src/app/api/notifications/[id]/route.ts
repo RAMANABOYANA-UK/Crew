@@ -25,7 +25,7 @@ export async function PATCH(
 
     if (!notification || notification.userId !== user.id) {
       return NextResponse.json(
-        { error: "Notification not found." },
+        { success: false, message: "Notification not found." },
         { status: 404 }
       );
     }
@@ -41,13 +41,14 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      data: updated,
-      unreadCount,
+      data: { notification: updated, unreadCount },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Update single notification error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -66,7 +67,7 @@ export async function DELETE(
 
     if (!notification || notification.userId !== user.id) {
       return NextResponse.json(
-        { error: "Notification not found." },
+        { success: false, message: "Notification not found." },
         { status: 404 }
       );
     }
@@ -82,11 +83,13 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       message: "Notification deleted successfully.",
-      unreadCount,
+      data: { unreadCount },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Delete single notification error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

@@ -55,12 +55,21 @@ export async function GET(request: NextRequest) {
       orderBy: { date: "desc" },
     });
 
-    return NextResponse.json({ attendances, total: attendances.length });
+    return NextResponse.json({
+      success: true,
+      data: { attendances, total: attendances.length },
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("All attendance fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

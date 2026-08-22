@@ -43,12 +43,21 @@ export async function GET(request: NextRequest) {
       rejected: leaveRequests.filter((l) => l.status === "REJECTED").length,
     };
 
-    return NextResponse.json({ leaveRequests, summary });
+    return NextResponse.json({
+      success: true,
+      data: { leaveRequests, summary },
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("All leaves fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

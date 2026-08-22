@@ -9,7 +9,10 @@ export async function POST(request: NextRequest) {
   try {
     const employee = await getCurrentEmployee();
     if (!employee) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
@@ -17,7 +20,11 @@ export async function POST(request: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.issues },
+        {
+          success: false,
+          message: "Validation failed",
+          data: parsed.error.issues,
+        },
         { status: 400 }
       );
     }
@@ -49,8 +56,9 @@ export async function POST(request: NextRequest) {
     if (overlapping) {
       return NextResponse.json(
         {
-          error: "You already have a leave request overlapping with these dates.",
-          existingLeave: overlapping,
+          success: false,
+          message: "You already have a leave request overlapping with these dates.",
+          data: overlapping,
         },
         { status: 409 }
       );
@@ -84,13 +92,19 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { message: "Leave request submitted.", leaveRequest },
+      {
+        success: true,
+        data: leaveRequest,
+        message: "Leave request submitted.",
+      },
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Leave apply error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -98,7 +112,10 @@ export async function GET(request: NextRequest) {
   try {
     const employee = await getCurrentEmployee();
     if (!employee) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
     const searchParams = request.nextUrl.searchParams;
@@ -122,10 +139,15 @@ export async function GET(request: NextRequest) {
       rejected: leaveRequests.filter((l) => l.status === "REJECTED").length,
     };
 
-    return NextResponse.json({ leaveRequests, summary });
+    return NextResponse.json({
+      success: true,
+      data: { leaveRequests, summary },
+    });
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Leave fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

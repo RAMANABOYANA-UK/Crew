@@ -82,12 +82,21 @@ export async function GET() {
       absent: statuses.filter((s) => s.statusDot === "yellow").length,
     };
 
-    return NextResponse.json({ statuses, summary });
+    return NextResponse.json({
+      success: true,
+      data: { statuses, summary },
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Today attendance error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

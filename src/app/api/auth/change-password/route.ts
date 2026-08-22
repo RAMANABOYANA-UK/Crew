@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
 
     if (!currentUser) {
       return NextResponse.json(
-        { success: false, error: "Unauthorized. Please sign in." },
+        { success: false, message: "Unauthorized. Please sign in." },
         { status: 401 }
       );
     }
@@ -21,8 +21,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Validation failed",
-          details: parsed.error.issues,
+          message: "Validation failed",
+          data: parsed.error.issues,
         },
         { status: 400 }
       );
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     if (!user || !user.passwordHash) {
       return NextResponse.json(
-        { success: false, error: "User account not found or has no password configured." },
+        { success: false, message: "User account not found or has no password configured." },
         { status: 404 }
       );
     }
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Current password is incorrect.",
+          message: "Current password is incorrect.",
         },
         { status: 400 }
       );
@@ -80,8 +80,10 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       message: "Password changed successfully. You now have full access to Dayflow HRMS.",
-      token,
-      mustChangePassword: false,
+      data: {
+        token,
+        mustChangePassword: false,
+      },
     });
 
     // Update the auth cookie
@@ -95,10 +97,9 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    if (error instanceof Response) return error;
     console.error("Change password error:", error);
     return NextResponse.json(
-      { success: false, error: "Internal server error while changing password" },
+      { success: false, message: "Internal server error while changing password" },
       { status: 500 }
     );
   }

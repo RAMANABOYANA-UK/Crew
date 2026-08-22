@@ -6,7 +6,7 @@
  */
 
 import "dotenv/config";
-import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaClient } from "../src/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import bcrypt from "bcryptjs";
@@ -62,7 +62,7 @@ async function main() {
   console.log("⚙️  Created SalaryConfig.\n");
 
   // 2. Create Employees (with linked credential User accounts)
-  const createdEmployees: Array<{ id: string; wage: number; firstName: string; lastName: string }> = [];
+  const createdEmployees: Array<{ id: string; userId: string; wage: number; firstName: string; lastName: string }> = [];
 
   for (let i = 0; i < employees.length; i++) {
     const emp = employees[i];
@@ -97,6 +97,7 @@ async function main() {
         department: emp.department,
         designation: emp.designation,
         dateOfJoining: emp.joinDate,
+        joinDate: emp.joinDate,
         role: emp.role,
       },
     });

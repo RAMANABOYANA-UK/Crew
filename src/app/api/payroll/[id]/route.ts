@@ -19,7 +19,11 @@ export async function PATCH(
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.issues },
+        {
+          success: false,
+          message: "Validation failed",
+          data: parsed.error.issues,
+        },
         { status: 400 }
       );
     }
@@ -38,7 +42,7 @@ export async function PATCH(
 
     if (!payroll) {
       return NextResponse.json(
-        { error: "Payroll record not found." },
+        { success: false, message: "Payroll record not found." },
         { status: 404 }
       );
     }
@@ -70,7 +74,8 @@ export async function PATCH(
     } catch (error) {
       return NextResponse.json(
         {
-          error:
+          success: false,
+          message:
             error instanceof Error
               ? error.message
               : "Invalid wage for salary computation.",
@@ -103,16 +108,22 @@ export async function PATCH(
     });
 
     return NextResponse.json({
+      success: true,
+      data: { payroll: updated, breakdown },
       message: `Wage updated for ${updated.employee.firstName} ${updated.employee.lastName}. All components recomputed.`,
-      payroll: updated,
-      breakdown,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Payroll update error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -142,17 +153,26 @@ export async function GET(
 
     if (!payroll) {
       return NextResponse.json(
-        { error: "Payroll record not found." },
+        { success: false, message: "Payroll record not found." },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ payroll });
+    return NextResponse.json({
+      success: true,
+      data: payroll,
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Payroll get error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

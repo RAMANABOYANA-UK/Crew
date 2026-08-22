@@ -24,14 +24,23 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      leaveRequests: pendingLeaves,
-      total: pendingLeaves.length,
+      success: true,
+      data: {
+        leaveRequests: pendingLeaves,
+        total: pendingLeaves.length,
+      },
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Pending leaves error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

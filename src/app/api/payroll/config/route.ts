@@ -13,25 +13,37 @@ export async function GET() {
     if (!config) {
       // Return defaults if no config record exists
       return NextResponse.json({
-        config: {
-          pfEmployeeRate: 0.12,
-          pfEmployerRate: 0.12,
-          professionalTax: 200,
-          standardAllowance: 4167,
-          performanceBonusRate: 0.0833,
-          ltaRate: 0.0833,
+        success: true,
+        data: {
+          config: {
+            pfEmployeeRate: 0.12,
+            pfEmployerRate: 0.12,
+            professionalTax: 200,
+            standardAllowance: 4167,
+            performanceBonusRate: 0.0833,
+            ltaRate: 0.0833,
+          },
+          isDefault: true,
         },
-        isDefault: true,
       });
     }
 
-    return NextResponse.json({ config, isDefault: false });
+    return NextResponse.json({
+      success: true,
+      data: { config, isDefault: false },
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Config fetch error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
 
@@ -45,7 +57,11 @@ export async function PATCH(request: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.issues },
+        {
+          success: false,
+          message: "Validation failed",
+          data: parsed.error.issues,
+        },
         { status: 400 }
       );
     }
@@ -73,14 +89,21 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({
+      success: true,
+      data: config,
       message: "Salary configuration updated.",
-      config,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
     }
     console.error("Config update error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
