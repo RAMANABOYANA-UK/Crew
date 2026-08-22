@@ -72,6 +72,54 @@ See **§1** and **§13** of the prompt file for the full stack rationale and sug
 
 ---
 
+## ▶️ Running the Project
+
+### 1. Online Mode (Cloud Database)
+
+1. Copy `.env.example` to `.env.local`
+2. Put your cloud `DATABASE_URL` (Supabase / Neon etc.)
+3. Run:
+
+```bash
+npx prisma db push
+npm run dev
+```
+
+### 2. Offline / Local Mode (Recommended for Demo without Internet)
+
+This mode uses local PostgreSQL via Docker. No internet required after setup.
+
+**Step 1: Start local database**
+
+```bash
+docker-compose up -d
+```
+
+**Step 2: Set local DATABASE_URL**
+
+In your `.env.local` use:
+
+```env
+DATABASE_URL="postgresql://dayflow:dayflow123@localhost:5432/dayflow?schema=public"
+```
+
+**Step 3: Push schema & run**
+
+```bash
+npx prisma db push
+npm run dev
+```
+
+**Stop the local database**
+
+```bash
+docker-compose down
+```
+
+> Note: You can switch between Online and Offline mode anytime by just changing the `DATABASE_URL` in `.env.local`.
+
+---
+
 ## ⚠️ Known Open Questions
 
 Two ambiguities between the original wireframe and the requirements doc were resolved with explicit assumptions rather than left unspecified — flagged for stakeholder review before pixel-perfect implementation:
