@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:frontend": "npm --prefix frontend run dev",
     "build": "next build",
+    "build:frontend": "npm --prefix frontend run build",
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
