@@ -68,14 +68,73 @@ function seedDB(): DB {
 
 export const api = {
   // ---------------- company / auth ----------------
-  getCompany: async (): Promise<Company> => { await delay(); return loadDB().company; },
+  getCompany: async (): Promise<Company> => {
+    try {
+      const res = await fetch('/api/payroll/config');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.company) return json.company;
+      }
+    } catch {}
+    await delay(100);
+    return loadDB().company;
+  },
 
   login: async (identifier: string, password: string): Promise<Employee> => {
-    await delay(480);
+    // 1. Send request to Next.js backend API
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loginId: identifier.trim(), password }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.data?.user) {
+        const db = loadDB();
+        const id = identifier.trim().toLowerCase();
+        const emp = db.employees.find((e) =>
+          e.email.toLowerCase() === id || e.loginId.toLowerCase() === id
+        ) ?? {
+          id: data.data.user.employee?.id || data.data.user.id,
+          loginId: data.data.user.loginId || identifier,
+          firstName: data.data.user.employee?.firstName || data.data.user.email.split('@')[0],
+          lastName: data.data.user.employee?.lastName || '',
+          email: data.data.user.email,
+          phone: '+91 98765 43210',
+          role: data.data.user.role.toLowerCase() === 'admin' ? 'admin' : 'employee',
+          department: data.data.user.employee?.department || 'Operations',
+          designation: data.data.user.employee?.designation || 'Specialist',
+          managerId: null,
+          dateOfJoining: todayStr(),
+          avatarColor: '#6d4aff',
+          photo: null,
+          workingDaysPerWeek: 5,
+          basicHoursPerDay: 8,
+          wageType: 'fixed',
+          fixedWage: 60000,
+          hourlyRate: 0,
+          about: '',
+          loveJob: '',
+          hobbies: '',
+          skills: [],
+          certifications: [],
+          personal: { dob: '1998-05-15', personalEmail: data.data.user.email, address: 'Corporate Towers', maritalStatus: 'Single', bloodGroup: 'O+', city: 'Mumbai', pincode: '400001' },
+        };
+        db.sessionUserId = emp.id;
+        persist();
+        return emp;
+      }
+    } catch {
+      // Backend offline / network fallback
+    }
+
+    // 2. Client-side fallback
+    await delay(350);
     const db = loadDB();
     const id = identifier.trim().toLowerCase();
     const emp = db.employees.find((e) =>
-      e.email.toLowerCase() === id || e.loginId.toLowerCase() === id);
+      e.email.toLowerCase() === id || e.loginId.toLowerCase() === id
+    );
     if (!emp || password !== 'Crew@1234') {
       const err = new Error('Invalid Login ID / Email or password. Please try again.');
       (err as Error & { code?: string }).code = 'AUTH';
@@ -87,7 +146,15 @@ export const api = {
   },
 
   signup: async (payload: { companyName: string; logo: string | null; firstName: string; lastName: string; email: string; phone: string; password: string }): Promise<{ emp: Employee; company: Company }> => {
-    await delay(600);
+    try {
+      await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch {}
+
+    await delay(500);
     const db = loadDB();
     const company: Company = { name: payload.companyName, code: companyCodeFromName(payload.companyName), logo: payload.logo };
     const admin: Employee = {
@@ -124,10 +191,24 @@ export const api = {
     return { emp: admin, company };
   },
 
-  logout: async (): Promise<void> => { await delay(120); loadDB().sessionUserId = null; persist(); },
-// ---------------- employees ----------------
-  getEmployees: async (): Promise<Employee[]> => { await delay(); return loadDB().employees; },
-  getEmployee: async (id: string): Promise<Employee | undefined> => { await delay(300); return loadDB().employees.find((e) => e.id === id); },
+  logout: async (): Promise<void> => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    await delay(120);
+    loadDB().sessionUserId = null;
+    persist();
+  },
+
+  // ---------------- employees ----------------
+  getEmployees: async (): Promise<Employee[]> => {
+    await delay(100);
+    return loadDB().employees;
+  },
+  getEmployee: async (id: string): Promise<Employee | undefined> => {
+    await delay(120);
+    return loadDB().employees.find((e) => e.id === id);
+  },
 
   addEmployee: async (input: {
     firstName: string; lastName: string; email: string; phone: string;

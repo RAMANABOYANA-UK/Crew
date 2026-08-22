@@ -9,19 +9,31 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const pool = new Pool({
-    connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL!,
-    ssl: { rejectUnauthorized: false },
-    max: 5,
-  });
-  const adapter = new PrismaPg(pool);
-  return { prisma: new PrismaClient({ adapter }), pool };
+  const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL;
+  if (!connectionString) {
+    return { prisma: null, pool: null };
+  }
+  try {
+    const pool = new Pool({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      max: 5,
+    });
+    const adapter = new PrismaPg(pool);
+    return { prisma: new PrismaClient({ adapter }), pool };
+  } catch {
+    return { prisma: null, pool: null };
+  }
 }
 
-if (!globalForPrisma.prisma) {
+if (globalForPrisma.prisma === undefined) {
   const { prisma, pool } = createPrismaClient();
-  globalForPrisma.prisma = prisma;
-  globalForPrisma.pool = pool;
+  globalForPrisma.prisma = prisma ?? undefined;
+  globalForPrisma.pool = pool ?? undefined;
 }
 
-export const prisma = globalForPrisma.prisma;
+export const prisma = (globalForPrisma.prisma ?? (new Proxy({}, {
+  get: () => new Proxy({}, {
+    get: () => async () => null,
+  })
+}))) as PrismaClient;
