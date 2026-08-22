@@ -31,6 +31,7 @@ export async function PATCH(
     // Find the leave request
     const leaveRequest = await prisma.leaveRequest.findUnique({
       where: { id },
+      include: { employee: true },
     });
 
     if (!leaveRequest) {
@@ -72,6 +73,23 @@ export async function PATCH(
         },
       },
     });
+
+    // On Approval: deduct days from employee leave balance
+    if (status === "APPROVED") {
+      if (leaveRequest.leaveType === "PAID" || leaveRequest.leaveType === "CASUAL") {
+        const currentBalance = leaveRequest.employee.paidLeaveBalance ?? 12;
+        await prisma.employee.update({
+          where: { id: leaveRequest.employeeId },
+          data: { paidLeaveBalance: Math.max(0, currentBalance - leaveRequest.totalDays) },
+        });
+      } else if (leaveRequest.leaveType === "SICK") {
+        const currentBalance = leaveRequest.employee.sickLeaveBalance ?? 6;
+        await prisma.employee.update({
+          where: { id: leaveRequest.employeeId },
+          data: { sickLeaveBalance: Math.max(0, currentBalance - leaveRequest.totalDays) },
+        });
+      }
+    }
 
     // Notify the employee about the review decision
     if (updated.employee.userId) {

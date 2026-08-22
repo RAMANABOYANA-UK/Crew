@@ -39,6 +39,31 @@ export async function POST(request: NextRequest) {
     const totalDays =
       Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
+    // Check remaining leave balance
+    if (leaveType === "PAID" || leaveType === "CASUAL") {
+      const currentBalance = employee.paidLeaveBalance ?? 12;
+      if (totalDays > currentBalance) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Insufficient paid/casual leave balance. Requested ${totalDays} day(s), available ${currentBalance} day(s).`,
+          },
+          { status: 400 }
+        );
+      }
+    } else if (leaveType === "SICK") {
+      const currentBalance = employee.sickLeaveBalance ?? 6;
+      if (totalDays > currentBalance) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: `Insufficient sick leave balance. Requested ${totalDays} day(s), available ${currentBalance} day(s).`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Check for overlapping leave requests (not rejected)
     const overlapping = await prisma.leaveRequest.findFirst({
       where: {
@@ -137,6 +162,8 @@ export async function GET(request: NextRequest) {
       pending: leaveRequests.filter((l) => l.status === "PENDING").length,
       approved: leaveRequests.filter((l) => l.status === "APPROVED").length,
       rejected: leaveRequests.filter((l) => l.status === "REJECTED").length,
+      paidBalance: employee.paidLeaveBalance ?? 12,
+      sickBalance: employee.sickLeaveBalance ?? 6,
     };
 
     return NextResponse.json({

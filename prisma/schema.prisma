@@ -65,37 +65,41 @@ model User {
 }
 
 model Employee {
-  id             String         @id @default(cuid())
-  clerkUserId    String?        @unique
-  userId         String?        @unique
-  user           User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String         @id @default(cuid())
+  clerkUserId        String?        @unique
+  userId             String?        @unique
+  user               User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  loginId        String?        @unique
-  employeeId     String?        @unique
-  firstName      String
-  lastName       String
-  email          String?
-  phone          String?
-  department     String?
-  designation    String?
-  dateOfJoining  DateTime?
-  joinDate       DateTime?
-  profilePic     String?
-  profilePicture String?
-  role           Role           @default(EMPLOYEE)
-  status         EmployeeStatus @default(ACTIVE)
+  loginId            String?        @unique
+  employeeId         String?        @unique
+  firstName          String
+  lastName           String
+  email              String?
+  phone              String?
+  department         String?
+  designation        String?
+  dateOfJoining      DateTime?
+  joinDate           DateTime?
+  profilePic         String?
+  profilePicture     String?
+  role               Role           @default(EMPLOYEE)
+  status             EmployeeStatus @default(ACTIVE)
 
-  basicSalary    Float          @default(0)
-  hra            Float          @default(0)
-  allowances     Float          @default(0)
+  paidLeaveBalance   Int            @default(12)
+  sickLeaveBalance   Int            @default(6)
+  unpaidLeaveBalance Int            @default(0)
 
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  basicSalary        Float          @default(0)
+  hra                Float          @default(0)
+  allowances         Float          @default(0)
+
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   // P3 Relations
-  attendances    Attendance[]
-  leaveRequests  LeaveRequest[]
-  payroll        Payroll?
+  attendances        Attendance[]
+  leaveRequests      LeaveRequest[]
+  payroll            Payroll?
 }
 
 // ─── P3 Models (Attendance / Leave / Payroll) ───────────
