@@ -67,6 +67,21 @@ export async function POST(req: NextRequest) {
       include: { employee: true },
     });
 
+    // Record immutable audit entry
+    try {
+      const { logAuditEvent } = await import("@/lib/audit");
+      await logAuditEvent({
+        actorId: updatedUser.id,
+        actorEmail: updatedUser.email,
+        action: "PASSWORD_CHANGED",
+        entityType: "User",
+        entityId: updatedUser.id,
+        newValues: { mustChangePassword: false, isFirstLogin: false },
+      });
+    } catch (auditErr) {
+      console.error("Failed to write audit log for password change:", auditErr);
+    }
+
     // Generate new token reflecting updated password status
     const token = generateToken({
       userId: updatedUser.id,

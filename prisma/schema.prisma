@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
@@ -83,15 +83,16 @@ model Employee {
   profilePic         String?
   profilePicture     String?
   role               Role           @default(EMPLOYEE)
+  address            String?
   status             EmployeeStatus @default(ACTIVE)
 
   paidLeaveBalance   Int            @default(12)
   sickLeaveBalance   Int            @default(6)
   unpaidLeaveBalance Int            @default(0)
 
-  basicSalary        Float          @default(0)
-  hra                Float          @default(0)
-  allowances         Float          @default(0)
+  basicSalary        Decimal        @default(0) @db.Decimal(10, 2)
+  hra                Decimal        @default(0) @db.Decimal(10, 2)
+  allowances         Decimal        @default(0) @db.Decimal(10, 2)
 
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
@@ -100,6 +101,7 @@ model Employee {
   attendances        Attendance[]
   leaveRequests      LeaveRequest[]
   payroll            Payroll?
+  payrollAnomalies   PayrollAnomaly[]
 }
 
 // ─── P3 Models (Attendance / Leave / Payroll) ───────────
@@ -146,17 +148,17 @@ model Payroll {
   id                String   @id @default(cuid())
   employeeId        String   @unique
   employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  wage              Float
-  basicSalary       Float
-  hra               Float
-  standardAllowance Float
-  performanceBonus  Float
-  lta               Float
-  fixedAllowance    Float
-  pfEmployee        Float
-  pfEmployer        Float
-  professionalTax   Float
-  netPayable        Float
+  wage              Decimal  @db.Decimal(10, 2)
+  basicSalary       Decimal  @db.Decimal(10, 2)
+  hra               Decimal  @db.Decimal(10, 2)
+  standardAllowance Decimal  @db.Decimal(10, 2)
+  performanceBonus  Decimal  @db.Decimal(10, 2)
+  lta               Decimal  @db.Decimal(10, 2)
+  fixedAllowance    Decimal  @db.Decimal(10, 2)
+  pfEmployee        Decimal  @db.Decimal(10, 2)
+  pfEmployer        Decimal  @db.Decimal(10, 2)
+  professionalTax   Decimal  @db.Decimal(10, 2)
+  netPayable        Decimal  @db.Decimal(10, 2)
   payableDays       Int      @default(0)
   totalWorkingDays  Int      @default(22)
   createdAt         DateTime @default(now())
@@ -165,12 +167,12 @@ model Payroll {
 
 model SalaryConfig {
   id                   String   @id @default(cuid())
-  pfEmployeeRate       Float    @default(0.12)
-  pfEmployerRate       Float    @default(0.12)
-  professionalTax      Float    @default(200)
-  standardAllowance    Float    @default(4167)
-  performanceBonusRate Float    @default(0.0833)
-  ltaRate              Float    @default(0.0833)
+  pfEmployeeRate       Decimal  @default(0.12) @db.Decimal(5, 4)
+  pfEmployerRate       Decimal  @default(0.12) @db.Decimal(5, 4)
+  professionalTax      Decimal  @default(200) @db.Decimal(10, 2)
+  standardAllowance    Decimal  @default(4167) @db.Decimal(10, 2)
+  performanceBonusRate Decimal  @default(0.0833) @db.Decimal(5, 4)
+  ltaRate              Decimal  @default(0.0833) @db.Decimal(5, 4)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -189,4 +191,51 @@ model Notification {
 
   @@index([userId])
   @@index([isRead])
+}
+
+// ─── Enterprise HRMS Models (Audit & Anomalies) ─────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actorEmail String?
+  action     String
+  entityType String
+  entityId   String?
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model PayrollAnomaly {
+  id          String          @id @default(cuid())
+  employeeId  String
+  employee    Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollId   String?
+  ruleCode    String
+  severity    AnomalySeverity @default(MEDIUM)
+  title       String
+  description String
+  details     Json?
+  isResolved  Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([employeeId])
+  @@index([ruleCode])
+  @@index([isResolved])
 }

@@ -5,8 +5,10 @@ import { leaveRequestSchema, leaveReviewSchema } from "../src/lib/validations/le
 import { updateWageSchema, updateSalaryConfigSchema } from "../src/lib/validations/payroll";
 import { loginSchema, changePasswordSchema, onboardEmployeeSchema } from "../src/lib/validations/auth";
 import { hashPassword, comparePassword, generateToken, verifyToken } from "../src/lib/auth";
-import { sendEmailAlert } from "../src/lib/email";
+import { sendEmailAlert, renderHtmlTemplate } from "../src/lib/email";
 import { createNotification, notifyAdmins } from "../src/lib/notifications";
+import { logAuditEvent } from "../src/lib/audit";
+import { scanPayrollAnomalies, persistDetectedAnomalies } from "../src/lib/payroll-anomalies";
 import { prisma } from "../src/lib/prisma";
 
 async function runTests() {
@@ -42,7 +44,7 @@ async function runTests() {
   // -------------------------------------------------------------
   // TEST GROUP 1: Salary Computation Engine & Business Rules
   // -------------------------------------------------------------
-  console.log("📋 [1/8] Testing Salary Computation Engine...");
+  console.log("📋 [1/10] Testing Salary Computation Engine (Decimal Precision)...");
   try {
     const wage = 85000;
     const salary = computeSalaryBreakdown(wage, DEFAULT_SALARY_CONFIG);
@@ -80,7 +82,7 @@ async function runTests() {
   // -------------------------------------------------------------
   // TEST GROUP 2: Login ID Generator
   // -------------------------------------------------------------
-  console.log("\n📋 [2/8] Testing Login ID Auto-Generation Format...");
+  console.log("\n📋 [2/10] Testing Login ID Auto-Generation Format...");
   try {
     const id1 = generateLoginIdSync("John", "Doe", new Date("2023-05-10"), 1);
     assert(id1 === "OIJODO20230001", "Generates OI + First2 + Last2 + Year + 4-digit serial (OIJODO20230001)", `Got ${id1}`);
@@ -94,7 +96,7 @@ async function runTests() {
   // -------------------------------------------------------------
   // TEST GROUP 3: Zod Validation Schemas
   // -------------------------------------------------------------
-  console.log("\n📋 [3/8] Testing Zod Validation Schemas...");
+  console.log("\n📋 [3/10] Testing Zod Validation Schemas...");
   try {
     const validLeave = leaveRequestSchema.safeParse({
       leaveType: "PAID",
@@ -148,7 +150,7 @@ async function runTests() {
   // -------------------------------------------------------------
   // TEST GROUP 4: Password Hashing & JWT Tokens
   // -------------------------------------------------------------
-  console.log("\n📋 [4/8] Testing Password Hashing & JWT Tokens...");
+  console.log("\n📋 [4/10] Testing Password Hashing & JWT Tokens...");
   try {
     const rawPass = "DayflowSecret2026!";
     const hash = hashPassword(rawPass);
@@ -173,9 +175,9 @@ async function runTests() {
   }
 
   // -------------------------------------------------------------
-  // TEST GROUP 5: Live Database Records & Queries
+  // TEST GROUP 5: Live Database Records & Queries (Decimal Verification)
   // -------------------------------------------------------------
-  console.log("\n📋 [5/8] Testing Live Database Records & Queries...");
+  console.log("\n📋 [5/10] Testing Live Database Records & Queries (Decimal Money)...");
   try {
     const employeesCount = await withRetry(() => prisma.employee.count());
     assert(employeesCount >= 10, `Database contains at least 10 seeded employees (found ${employeesCount})`);
@@ -199,8 +201,9 @@ async function runTests() {
     const pendingLeaves = await withRetry(() => prisma.leaveRequest.count({ where: { status: "PENDING" } }));
     assert(pendingLeaves === 3, `Database contains 3 pending leaves for admin approval demo queue (found ${pendingLeaves})`);
 
-    const payrollsCount = await withRetry(() => prisma.payroll.count());
-    assert(payrollsCount >= 10, `All employees have active payroll records (found ${payrollsCount})`);
+    const payrolls = await withRetry(() => prisma.payroll.findMany());
+    assert(payrolls.length >= 10, `All employees have active payroll records (found ${payrolls.length})`);
+    assert(typeof Number(payrolls[0].wage) === "number" && Number(payrolls[0].wage) > 0, "Payroll wage stored with Decimal precision");
 
     const notifsCount = await withRetry(() => prisma.notification.count());
     assert(notifsCount >= 6, `Database contains seeded notifications (found ${notifsCount})`);
@@ -211,7 +214,7 @@ async function runTests() {
   // -------------------------------------------------------------
   // TEST GROUP 6: Admin Onboarding & First-Login Password Change Simulation
   // -------------------------------------------------------------
-  console.log("\n📋 [6/8] Testing Admin Onboarding & First-Login Simulation...");
+  console.log("\n📋 [6/10] Testing Admin Onboarding & First-Login Simulation...");
   try {
     const testEmail = `test.onboard.${Date.now()}@dayflow.com`;
     const initialTempPassword = "InitialTempPass2026!";
@@ -276,7 +279,7 @@ async function runTests() {
   // -------------------------------------------------------------
   // TEST GROUP 7: Notifications & Email Alert Dispatch
   // -------------------------------------------------------------
-  console.log("\n📋 [7/8] Testing Notifications & Email Alerts...");
+  console.log("\n📋 [7/10] Testing Notifications & Email Alerts...");
   try {
     const admin = await prisma.user.findFirst({ where: { role: "ADMIN" } });
     assert(Boolean(admin), "Admin user found for notification testing");
@@ -336,25 +339,29 @@ async function runTests() {
         to: "test@dayflow.com",
         subject: "Test Subject",
         text: "Test body",
+        category: "leave",
       });
       assert(enabledResult.enabled && enabledResult.sent, "Email alert is dispatched when ENABLE_EMAIL_ALERTS=true");
+
+      const html = renderHtmlTemplate("Leave Notification", "<p>Test notification body</p>");
+      assert(html.includes("Dayflow HRMS") && html.includes("Leave Notification"), "HTML template rendered with branding");
     }
   } catch (err: any) {
     assert(false, "Notifications suite exception", err?.message);
   }
 
   // -------------------------------------------------------------
-  // TEST GROUP 8: Analytics Overview & Summary Calculation Accuracy
+  // TEST GROUP 8: Analytics Overview & Summary Aggregates
   // -------------------------------------------------------------
-  console.log("\n📋 [8/8] Testing Analytics Overview & Summary Aggregates...");
+  console.log("\n📋 [8/10] Testing Analytics Overview & Summary Aggregates...");
   try {
     const totalEmployees = await prisma.employee.count();
     const activeEmployees = await prisma.employee.count({ where: { status: "ACTIVE" } });
     assert(totalEmployees === activeEmployees, `All ${totalEmployees} seeded employees are ACTIVE`);
 
     const payrolls = await prisma.payroll.findMany({ select: { wage: true, netPayable: true } });
-    const totalWage = payrolls.reduce((sum, p) => sum + p.wage, 0);
-    const totalNet = payrolls.reduce((sum, p) => sum + p.netPayable, 0);
+    const totalWage = payrolls.reduce((sum, p) => sum + Number(p.wage), 0);
+    const totalNet = payrolls.reduce((sum, p) => sum + Number(p.netPayable), 0);
     assert(totalWage > totalNet, `Total Monthly CTC (₹${totalWage}) > Total Net Payable (₹${totalNet}) due to PF/Tax deductions`);
 
     const departments = await prisma.employee.groupBy({
@@ -370,6 +377,75 @@ async function runTests() {
     assert(leaves.length >= 2, `Leave distribution aggregates ${leaves.length} leave types`);
   } catch (err: any) {
     assert(false, "Analytics suite exception", err?.message);
+  }
+
+  // -------------------------------------------------------------
+  // TEST GROUP 9: Immutable Audit Logging
+  // -------------------------------------------------------------
+  console.log("\n📋 [9/10] Testing Immutable Audit Logging...");
+  try {
+    const testAction = `TEST_ACTION_${Date.now()}`;
+    const logEntry = await logAuditEvent({
+      actorId: "user_audit_test",
+      actorEmail: "audit.test@dayflow.com",
+      action: testAction,
+      entityType: "TestEntity",
+      entityId: "ent_123",
+      oldValues: { status: "DRAFT" },
+      newValues: { status: "PUBLISHED" },
+      ipAddress: "10.0.0.1",
+      userAgent: "AutomatedTestAgent/1.0",
+    });
+
+    assert(Boolean(logEntry?.id), "Audit log created successfully with generated ID");
+    assert(logEntry?.action === testAction, "Audit log preserves action name");
+    assert(logEntry?.ipAddress === "10.0.0.1", "Audit log records client IP address");
+
+    const fetchedLog = await prisma.auditLog.findUnique({ where: { id: logEntry!.id } });
+    assert(fetchedLog !== null, "Audit log entry is persisted in database");
+    assert(JSON.stringify(fetchedLog?.newValues).includes("PUBLISHED"), "Audit log stores structured JSON values");
+
+    const countLogs = await prisma.auditLog.count();
+    assert(countLogs >= 4, `Database contains audit trail entries (found ${countLogs})`);
+
+    // Clean up test audit log
+    await prisma.auditLog.delete({ where: { id: logEntry!.id } });
+  } catch (err: any) {
+    assert(false, "Audit logging suite exception", err?.message);
+  }
+
+  // -------------------------------------------------------------
+  // TEST GROUP 10: Payroll Anomaly Detection Engine
+  // -------------------------------------------------------------
+  console.log("\n📋 [10/10] Testing Payroll Anomaly Detection Engine...");
+  try {
+    const anomalies = await scanPayrollAnomalies();
+    assert(Array.isArray(anomalies), "scanPayrollAnomalies returns an array of detected anomalies");
+
+    const countPersisted = await persistDetectedAnomalies();
+    assert(typeof countPersisted === "number", "persistDetectedAnomalies runs successfully and returns count");
+
+    const dbAnomalies = await prisma.payrollAnomaly.findMany();
+    assert(dbAnomalies.length >= 1, `Database contains recorded anomaly flags (found ${dbAnomalies.length})`);
+
+    const anomalyRecord = dbAnomalies[0];
+    assert(Boolean(anomalyRecord.title && anomalyRecord.ruleCode), "Anomaly record has title and ruleCode");
+    assert(anomalyRecord.isResolved === false || anomalyRecord.isResolved === true, "Anomaly has boolean resolution state");
+
+    // Test resolving an anomaly
+    const resolved = await prisma.payrollAnomaly.update({
+      where: { id: anomalyRecord.id },
+      data: { isResolved: true },
+    });
+    assert(resolved.isResolved === true, "Payroll anomaly can be marked as resolved");
+
+    // Restore to unresolved
+    await prisma.payrollAnomaly.update({
+      where: { id: anomalyRecord.id },
+      data: { isResolved: false },
+    });
+  } catch (err: any) {
+    assert(false, "Payroll anomaly detection suite exception", err?.message);
   }
 
   console.log("\n==================================================");

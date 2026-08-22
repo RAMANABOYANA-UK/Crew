@@ -52,8 +52,8 @@ export async function GET() {
       existing.count += 1;
       if (emp.status === "ACTIVE") existing.activeCount += 1;
       if (emp.payroll) {
-        existing.totalWage += emp.payroll.wage;
-        existing.totalNet += emp.payroll.netPayable;
+        existing.totalWage += Number(emp.payroll.wage);
+        existing.totalNet += Number(emp.payroll.netPayable);
       }
       deptMap.set(dept, existing);
     }
@@ -122,30 +122,30 @@ export async function GET() {
 
     // 4. Payroll Total Expenses Breakdown
     const payrollExpenseBreakdown = {
-      totalWage: Math.round(payrolls.reduce((sum, p) => sum + p.wage, 0)),
-      totalBasic: Math.round(payrolls.reduce((sum, p) => sum + p.basicSalary, 0)),
-      totalHra: Math.round(payrolls.reduce((sum, p) => sum + p.hra, 0)),
+      totalWage: Math.round(payrolls.reduce((sum, p) => sum + Number(p.wage), 0)),
+      totalBasic: Math.round(payrolls.reduce((sum, p) => sum + Number(p.basicSalary), 0)),
+      totalHra: Math.round(payrolls.reduce((sum, p) => sum + Number(p.hra), 0)),
       totalStandardAllowance: Math.round(
-        payrolls.reduce((sum, p) => sum + p.standardAllowance, 0)
+        payrolls.reduce((sum, p) => sum + Number(p.standardAllowance), 0)
       ),
       totalPerformanceBonus: Math.round(
-        payrolls.reduce((sum, p) => sum + p.performanceBonus, 0)
+        payrolls.reduce((sum, p) => sum + Number(p.performanceBonus), 0)
       ),
-      totalLta: Math.round(payrolls.reduce((sum, p) => sum + p.lta, 0)),
+      totalLta: Math.round(payrolls.reduce((sum, p) => sum + Number(p.lta), 0)),
       totalFixedAllowance: Math.round(
-        payrolls.reduce((sum, p) => sum + p.fixedAllowance, 0)
+        payrolls.reduce((sum, p) => sum + Number(p.fixedAllowance), 0)
       ),
       totalPfEmployee: Math.round(
-        payrolls.reduce((sum, p) => sum + p.pfEmployee, 0)
+        payrolls.reduce((sum, p) => sum + Number(p.pfEmployee), 0)
       ),
       totalPfEmployer: Math.round(
-        payrolls.reduce((sum, p) => sum + p.pfEmployer, 0)
+        payrolls.reduce((sum, p) => sum + Number(p.pfEmployer), 0)
       ),
       totalProfessionalTax: Math.round(
-        payrolls.reduce((sum, p) => sum + p.professionalTax, 0)
+        payrolls.reduce((sum, p) => sum + Number(p.professionalTax), 0)
       ),
       totalNetPayable: Math.round(
-        payrolls.reduce((sum, p) => sum + p.netPayable, 0)
+        payrolls.reduce((sum, p) => sum + Number(p.netPayable), 0)
       ),
     };
 

@@ -46,10 +46,10 @@ export async function GET() {
       (a) => a.status === "ABSENT"
     ).length;
 
-    const totalMonthlyPayroll = payrolls.reduce((sum, p) => sum + p.netPayable, 0);
-    const totalWageCTC = payrolls.reduce((sum, p) => sum + p.wage, 0);
+    const totalMonthlyPayroll = payrolls.reduce((sum, p) => sum + Number(p.netPayable), 0);
+    const totalWageCTC = payrolls.reduce((sum, p) => sum + Number(p.wage), 0);
     const totalTaxesAndDeductions = payrolls.reduce(
-      (sum, p) => sum + p.pfEmployee + p.professionalTax,
+      (sum, p) => sum + Number(p.pfEmployee) + Number(p.professionalTax),
       0
     );
 

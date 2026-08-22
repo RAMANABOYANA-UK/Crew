@@ -27,8 +27,8 @@ export async function GET() {
       },
     });
 
-    const totalWageExpense = payrolls.reduce((sum, p) => sum + p.wage, 0);
-    const totalNetPayable = payrolls.reduce((sum, p) => sum + p.netPayable, 0);
+    const totalWageExpense = payrolls.reduce((sum, p) => sum + Number(p.wage), 0);
+    const totalNetPayable = payrolls.reduce((sum, p) => sum + Number(p.netPayable), 0);
 
     return NextResponse.json({
       success: true,

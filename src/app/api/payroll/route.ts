@@ -65,12 +65,12 @@ export async function GET() {
     const config = await prisma.salaryConfig.findFirst();
     const salaryConfig: SalaryConfigInput = config
       ? {
-          pfEmployeeRate: config.pfEmployeeRate,
-          pfEmployerRate: config.pfEmployerRate,
-          professionalTax: config.professionalTax,
-          standardAllowance: config.standardAllowance,
-          performanceBonusRate: config.performanceBonusRate,
-          ltaRate: config.ltaRate,
+          pfEmployeeRate: Number(config.pfEmployeeRate),
+          pfEmployerRate: Number(config.pfEmployerRate),
+          professionalTax: Number(config.professionalTax),
+          standardAllowance: Number(config.standardAllowance),
+          performanceBonusRate: Number(config.performanceBonusRate),
+          ltaRate: Number(config.ltaRate),
         }
       : {
           pfEmployeeRate: 0.12,
@@ -81,7 +81,7 @@ export async function GET() {
           ltaRate: 0.0833,
         };
 
-    const breakdown = computeSalaryBreakdown(payroll.wage, salaryConfig);
+    const breakdown = computeSalaryBreakdown(Number(payroll.wage), salaryConfig);
     const proratedNet = computeProratedPayroll(
       breakdown,
       payableDays,

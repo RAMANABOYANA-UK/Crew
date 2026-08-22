@@ -231,6 +231,62 @@ async function main() {
   }
   console.log(`\n🔔 Seeded ${sampleNotifications.length} sample notifications.`);
 
+  // 7. Create Sample Audit Logs
+  const sampleAuditLogs = [
+    {
+      actorId: adminUser.userId,
+      actorEmail: "rajesh.kumar@dayflow.com",
+      action: "LEAVE_APPROVED",
+      entityType: "LeaveRequest",
+      entityId: "leave_seed_001",
+      oldValues: { status: "PENDING" },
+      newValues: { status: "APPROVED", adminComment: "Approved by Rajesh" },
+      ipAddress: "192.168.1.10",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+    },
+    {
+      actorId: adminUser.userId,
+      actorEmail: "rajesh.kumar@dayflow.com",
+      action: "EMPLOYEE_CREATED",
+      entityType: "Employee",
+      entityId: emp1.id,
+      newValues: { firstName: "Amit", lastName: "Patel", department: "Engineering", wage: 85000 },
+      ipAddress: "192.168.1.10",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
+    },
+    {
+      actorId: hrUser.userId,
+      actorEmail: "priya.sharma@dayflow.com",
+      action: "WAGE_UPDATED",
+      entityType: "Payroll",
+      entityId: "payroll_seed_002",
+      oldValues: { wage: 70000, netPayable: 65600 },
+      newValues: { wage: 72000, netPayable: 67480 },
+      ipAddress: "192.168.1.15",
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    },
+  ];
+
+  for (const log of sampleAuditLogs) {
+    await prisma.auditLog.create({ data: log });
+  }
+  console.log(`📜 Seeded ${sampleAuditLogs.length} audit log entries.`);
+
+  // 8. Create Sample Payroll Anomaly
+  const anomalyEmp = createdEmployees[9]; // Divya Bhat (lowest wage)
+  await prisma.payrollAnomaly.create({
+    data: {
+      employeeId: anomalyEmp.id,
+      ruleCode: "ATTENDANCE_MISMATCH",
+      severity: "LOW",
+      title: "Sample Verification Flag",
+      description: "Payable days verified against bi-weekly shift logs.",
+      details: { payableDays: 22, verified: true },
+      isResolved: false,
+    },
+  });
+  console.log(`⚠️  Seeded 1 sample payroll anomaly flag.`);
+
   console.log("\n✅ Seed completed successfully!");
 }
 

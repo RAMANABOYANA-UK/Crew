@@ -51,12 +51,12 @@ export async function PATCH(
     const config = await prisma.salaryConfig.findFirst();
     const salaryConfig: SalaryConfigInput = config
       ? {
-          pfEmployeeRate: config.pfEmployeeRate,
-          pfEmployerRate: config.pfEmployerRate,
-          professionalTax: config.professionalTax,
-          standardAllowance: config.standardAllowance,
-          performanceBonusRate: config.performanceBonusRate,
-          ltaRate: config.ltaRate,
+          pfEmployeeRate: Number(config.pfEmployeeRate),
+          pfEmployerRate: Number(config.pfEmployerRate),
+          professionalTax: Number(config.professionalTax),
+          standardAllowance: Number(config.standardAllowance),
+          performanceBonusRate: Number(config.performanceBonusRate),
+          ltaRate: Number(config.ltaRate),
         }
       : {
           pfEmployeeRate: 0.12,
@@ -106,6 +106,23 @@ export async function PATCH(
         },
       },
     });
+
+    // Record immutable audit entry
+    try {
+      const { logAuditEvent } = await import("@/lib/audit");
+      const admin = await requireRole(["ADMIN", "HR"]);
+      await logAuditEvent({
+        actorId: admin.userId,
+        actorEmail: admin.email,
+        action: "WAGE_UPDATED",
+        entityType: "Payroll",
+        entityId: payroll.id,
+        oldValues: { wage: Number(payroll.wage), netPayable: Number(payroll.netPayable) },
+        newValues: { wage: breakdown.wage, netPayable: breakdown.netPayable },
+      });
+    } catch (auditErr) {
+      console.error("Failed to write audit log for wage update:", auditErr);
+    }
 
     return NextResponse.json({
       success: true,

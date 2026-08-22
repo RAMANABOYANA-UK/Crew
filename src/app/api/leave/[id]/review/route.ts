@@ -110,6 +110,22 @@ export async function PATCH(
       }
     }
 
+    // Record immutable audit entry
+    try {
+      const { logAuditEvent } = await import("@/lib/audit");
+      await logAuditEvent({
+        actorId: admin.userId,
+        actorEmail: admin.email,
+        action: `LEAVE_${status}`,
+        entityType: "LeaveRequest",
+        entityId: leaveRequest.id,
+        oldValues: { status: leaveRequest.status },
+        newValues: { status, adminComment },
+      });
+    } catch (auditErr) {
+      console.error("Failed to write audit log for leave review:", auditErr);
+    }
+
     // If approved, create ON_LEAVE attendance records for each day in the leave period
     if (status === "APPROVED") {
       const start = new Date(leaveRequest.startDate);

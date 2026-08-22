@@ -88,6 +88,23 @@ export async function PATCH(request: NextRequest) {
       });
     }
 
+    // Record immutable audit entry
+    try {
+      const { logAuditEvent } = await import("@/lib/audit");
+      const admin = await requireRole(["ADMIN", "HR"]);
+      await logAuditEvent({
+        actorId: admin.userId,
+        actorEmail: admin.email,
+        action: "SALARY_CONFIG_UPDATED",
+        entityType: "SalaryConfig",
+        entityId: config.id,
+        oldValues: existing || undefined,
+        newValues: parsed.data,
+      });
+    } catch (auditErr) {
+      console.error("Failed to write audit log for salary config update:", auditErr);
+    }
+
     return NextResponse.json({
       success: true,
       data: config,
