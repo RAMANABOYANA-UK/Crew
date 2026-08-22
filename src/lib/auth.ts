@@ -1,57 +1,114 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { prisma } from "./prisma";
-import { Role } from "@/generated/prisma/client";
+import { supabase } from "./supabase";
 
-export async function getCurrentUser() {
+export type Employee = {
+  id: string;
+  clerk_user_id: string;
+  login_id: string;
+  employee_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone?: string | null;
+  address?: string | null;
+  department?: string | null;
+  designation?: string | null;
+  role: "EMPLOYEE" | "ADMIN" | "HR";
+  date_of_joining?: string | null;
+  status: string;
+  profile_picture?: string | null;
+  basic_salary?: number;
+  hra?: number;
+  allowances?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export async function getCurrentEmployee(): Promise<Employee | null> {
   const { userId } = await auth();
   if (!userId) return null;
 
-  return prisma.user.findUnique({
-    where: { clerkId: userId },
-    include: { employee: true },
-  });
+  const { data, error } = await supabase
+    .from("employees")
+    .select("*")
+    .eq("clerk_user_id", userId)
+    .single();
+
+  if (error || !data) return null;
+  return data as Employee;
 }
 
-export async function requireAuth() {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Unauthorized");
-  return user;
+export async function requireAuth(): Promise<Employee> {
+  const employee = await getCurrentEmployee();
+  if (!employee) {
+    throw new Error("Unauthorized");
+  }
+  return employee;
 }
 
-export async function requireAdmin() {
-  const user = await requireAuth();
-  if (user.role !== "ADMIN") throw new Error("Forbidden");
-  return user;
+export async function requireAdmin(): Promise<Employee> {
+  const employee = await requireAuth();
+  if (employee.role !== "ADMIN" && employee.role !== "HR") {
+    throw new Error("Forbidden");
+  }
+  return employee;
 }
 
-export async function syncUser() {
+export async function requireRole(roles: string[]): Promise<Employee> {
+  const employee = await requireAuth();
+  if (!roles.includes(employee.role)) {
+    throw new Error("Forbidden");
+  }
+  return employee;
+}
+
+export async function syncEmployee() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
   const email = clerkUser.emailAddresses[0]?.emailAddress;
   if (!email) return null;
 
-  let user = await prisma.user.findUnique({
-    where: { clerkId: clerkUser.id },
-    include: { employee: true },
-  });
+  // Check if employee already exists
+  const { data: existing } = await supabase
+    .from("employees")
+    .select("*")
+    .eq("clerk_user_id", clerkUser.id)
+    .single();
 
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        clerkId: clerkUser.id,
-        email,
-        role: Role.EMPLOYEE,
-        employee: {
-          create: {
-            firstName: clerkUser.firstName || "New",
-            lastName: clerkUser.lastName || "User",
-          },
-        },
-      },
-      include: { employee: true },
-    });
+  if (existing) {
+    return existing as Employee;
   }
 
-  return user;
+  // Create new employee
+  const firstName = clerkUser.firstName || "New";
+  const lastName = clerkUser.lastName || "User";
+  const year = new Date().getFullYear();
+  const random = Math.floor(1000 + Math.random() * 9000);
+
+  const loginId = `OI${firstName.slice(0, 2).toUpperCase()}${lastName.slice(0, 2).toUpperCase()}${year}${random}`;
+  const employeeId = `EMP${Date.now().toString().slice(-4)}`;
+
+  const { data: newEmployee, error } = await supabase
+    .from("employees")
+    .insert({
+      clerk_user_id: clerkUser.id,
+      login_id: loginId,
+      employee_id: employeeId,
+      email,
+      first_name: firstName,
+      last_name: lastName,
+      role: "EMPLOYEE",
+      status: "ACTIVE",
+      date_of_joining: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Failed to create employee:", error);
+    return null;
+  }
+
+  return newEmployee as Employee;
 }

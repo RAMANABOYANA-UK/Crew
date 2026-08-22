@@ -8,6 +8,9 @@ import type { SalaryConfigInput } from "@/lib/salary";
 export async function GET() {
   try {
     const employee = await getCurrentEmployee();
+    if (!employee) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const payroll = await prisma.payroll.findUnique({
       where: { employeeId: employee.id },

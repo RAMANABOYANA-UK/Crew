@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 
 export async function GET(
   req: NextRequest,
@@ -10,25 +10,21 @@ export async function GET(
     await requireAdmin();
     const { id } = await params;
 
-    const employee = await prisma.employee.findUnique({
-      where: { id },
-      include: {
-        user: {
-          select: { email: true, role: true, createdAt: true },
-        },
-      },
-    });
+    const { data, error } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("id", id)
+      .single();
 
-    if (!employee) {
+    if (error || !data) {
       return NextResponse.json(
         { success: false, message: "Employee not found" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true, data: employee });
-  } catch (error) {
-    console.error(error);
+    return NextResponse.json({ success: true, data });
+  } catch {
     return NextResponse.json(
       { success: false, message: "Forbidden" },
       { status: 403 }

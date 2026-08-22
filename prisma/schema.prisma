@@ -5,42 +5,101 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
   EMPLOYEE
   ADMIN
-}
-
-model User {
-  id        String   @id @default(cuid())
-  clerkId   String   @unique
-  email     String   @unique
-  role      Role     @default(EMPLOYEE)
-  employee  Employee?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  HR
 }
 
 model Employee {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  clerkUserId    String    @unique
+  loginId        String    @unique
+  employeeId     String    @unique
+  firstName      String
+  lastName       String
+  email          String    @unique
+  role           Role      @default(EMPLOYEE)
+  dateOfJoining  DateTime
+  status         String    @default("ACTIVE")
+  phone          String?
+  address        String?
+  profilePicture String?
+  department     String?
+  designation    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  firstName   String
-  lastName    String
-  phone       String?
-  address     String?
-  department  String?
-  designation String?
-  joinDate    DateTime?
-  profilePic  String?
+  attendances   Attendance[]
+  leaveRequests LeaveRequest[]
+  payrolls      Payroll[]
+}
 
-  basicSalary Float @default(0)
-  hra         Float @default(0)
-  allowances  Float @default(0)
+model Attendance {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      String    @default("PRESENT")
+  hoursWorked Float?
+  notes       String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@unique([employeeId, date])
+  @@index([employeeId, date])
+}
+
+model LeaveRequest {
+  id           String    @id @default(cuid())
+  employeeId   String
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    String
+  startDate    DateTime
+  endDate      DateTime
+  totalDays    Int       @default(1)
+  reason       String
+  status       String    @default("PENDING")
+  adminComment String?
+  reviewedBy   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([employeeId, status])
+}
+
+model Payroll {
+  id                String   @id @default(cuid())
+  employeeId        String
+  employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  wage              Float    @default(0)
+  basicSalary       Float    @default(0)
+  hra               Float    @default(0)
+  standardAllowance Float    @default(0)
+  performanceBonus  Float    @default(0)
+  lta               Float    @default(0)
+  fixedAllowance    Float    @default(0)
+  pfEmployee        Float    @default(0)
+  pfEmployer        Float    @default(0)
+  professionalTax   Float    @default(0)
+  netPayable        Float    @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([employeeId])
+}
+
+model SalaryConfig {
+  id                    String   @id @default(cuid())
+  pfEmployeeRate        Float    @default(0.12)
+  pfEmployerRate        Float    @default(0.12)
+  professionalTax       Float    @default(200)
+  standardAllowance     Float    @default(4167)
+  performanceBonusRate  Float    @default(0.0833)
+  ltaRate               Float    @default(0.0833)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

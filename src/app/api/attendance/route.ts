@@ -6,6 +6,9 @@ import { getCurrentEmployee } from "@/lib/auth";
 export async function GET(request: NextRequest) {
   try {
     const employee = await getCurrentEmployee();
+    if (!employee) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const startDateParam = searchParams.get("startDate");

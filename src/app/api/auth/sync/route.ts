@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
-import { syncUser } from "@/lib/auth";
+import { syncEmployee } from "@/lib/auth";
 
 export async function POST() {
   try {
-    const user = await syncUser();
-    if (!user) {
+    const employee = await syncEmployee();
+
+    if (!employee) {
       return NextResponse.json(
         { success: false, message: "Not authenticated" },
         { status: 401 }
       );
     }
-    return NextResponse.json({ success: true, data: user });
+
+    return NextResponse.json({ success: true, data: employee });
   } catch (error) {
-    console.error(error);
+    console.error("Sync error:", error);
     return NextResponse.json(
       { success: false, message: "Sync failed" },
       { status: 500 }

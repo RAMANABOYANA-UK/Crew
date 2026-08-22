@@ -52,7 +52,7 @@ export async function PATCH(
       data: {
         status,
         adminComment: adminComment || null,
-        reviewedBy: admin.clerkUserId,
+        reviewedBy: admin.clerk_user_id,
         reviewedAt: new Date(),
       },
       include: {

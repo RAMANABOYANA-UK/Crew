@@ -6,6 +6,9 @@ import { getCurrentEmployee } from "@/lib/auth";
 export async function POST(request: NextRequest) {
   try {
     const employee = await getCurrentEmployee();
+    if (!employee) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
