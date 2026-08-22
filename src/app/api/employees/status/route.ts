@@ -7,8 +7,8 @@ export async function GET() {
   try {
     await requireRole(["ADMIN", "HR"]);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
     // Get all active employees
     const employees = await prisma.employee.findMany({
@@ -20,7 +20,7 @@ export async function GET() {
         lastName: true,
         department: true,
         designation: true,
-        profilePicture: true,
+        profilePic: true,
       },
     });
 
@@ -81,7 +81,7 @@ export async function GET() {
         lastName: emp.lastName,
         department: emp.department,
         designation: emp.designation,
-        profilePicture: emp.profilePicture,
+        profilePicture: emp.profilePic,
         statusDot,
         statusEmoji,
         statusLabel,

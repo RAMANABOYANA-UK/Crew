@@ -60,10 +60,10 @@ export async function PATCH(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data: updated });
-  } catch (error: any) {
-    if (error.name === "ZodError") {
+  } catch (error: unknown) {
+    if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, message: error.errors },
+        { success: false, message: error.issues },
         { status: 400 }
       );
     }

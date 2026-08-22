@@ -16,8 +16,11 @@ npm-debug.log*
 .env
 .env.local
 
-# Generated / build artifacts
+# Next.js & Build
+.next/
+next-env.d.ts
 src/generated/
+/src/generated/
 tsconfig.tsbuildinfo
 
 # OS

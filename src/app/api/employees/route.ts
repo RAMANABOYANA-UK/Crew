@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,32 +10,34 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const department = searchParams.get("department");
 
-    let query = supabase
-      .from("employees")
-      .select("*")
-      .order("created_at", { ascending: false });
+    const employees = await prisma.employee.findMany({
+      where: {
+        AND: [
+          department ? { department } : {},
+          search
+            ? {
+                OR: [
+                  { firstName: { contains: search, mode: "insensitive" } },
+                  { lastName: { contains: search, mode: "insensitive" } },
+                  { email: { contains: search, mode: "insensitive" } },
+                  { employeeId: { contains: search, mode: "insensitive" } },
+                ],
+              }
+            : {},
+        ],
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-    if (search) {
-      query = query.or(
-        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,employee_id.ilike.%${search}%`
-      );
-    }
-
-    if (department) {
-      query = query.eq("department", department);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error(error);
-      return NextResponse.json(
-        { success: false, message: "Failed to fetch employees" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data: employees });
   } catch {
     return NextResponse.json(
       { success: false, message: "Forbidden" },

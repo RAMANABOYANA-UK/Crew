@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
@@ -7,99 +7,151 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Enums ──────────────────────────────────────────────
+
 enum Role {
-  EMPLOYEE
   ADMIN
   HR
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+}
+
+enum LeaveType {
+  PAID
+  SICK
+  UNPAID
+  CASUAL
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── P2 Models (Auth / Profile / Core) ──────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  role      Role     @default(EMPLOYEE)
+  employee  Employee?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Employee {
-  id             String    @id @default(cuid())
-  clerkUserId    String    @unique
-  loginId        String    @unique
-  employeeId     String    @unique
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  loginId        String?        @unique
+  employeeId     String?        @unique
   firstName      String
   lastName       String
-  email          String    @unique
-  role           Role      @default(EMPLOYEE)
-  dateOfJoining  DateTime
-  status         String    @default("ACTIVE")
+  email          String?
   phone          String?
-  address        String?
-  profilePicture String?
   department     String?
   designation    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  joinDate       DateTime?
+  profilePic     String?
+  address        String?
+  status         EmployeeStatus @default(ACTIVE)
 
-  attendances   Attendance[]
-  leaveRequests LeaveRequest[]
-  payrolls      Payroll[]
+  basicSalary    Float          @default(0)
+  hra            Float          @default(0)
+  allowances     Float          @default(0)
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // P3 Relations
+  attendances    Attendance[]
+  leaveRequests  LeaveRequest[]
+  payroll        Payroll?
 }
 
+// ─── P3 Models (Attendance / Leave / Payroll) ───────────
+
 model Attendance {
-  id          String    @id @default(cuid())
+  id          String           @id @default(cuid())
   employeeId  String
-  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  date        DateTime
+  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime         @db.Date
   checkIn     DateTime?
   checkOut    DateTime?
-  status      String    @default("PRESENT")
+  status      AttendanceStatus
   hoursWorked Float?
   notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@unique([employeeId, date])
-  @@index([employeeId, date])
+  @@index([employeeId])
+  @@index([date])
 }
 
 model LeaveRequest {
-  id           String    @id @default(cuid())
+  id           String      @id @default(cuid())
   employeeId   String
-  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveType    String
-  startDate    DateTime
-  endDate      DateTime
-  totalDays    Int       @default(1)
+  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  totalDays    Int
   reason       String
-  status       String    @default("PENDING")
+  status       LeaveStatus @default(PENDING)
   adminComment String?
   reviewedBy   String?
   reviewedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  @@index([employeeId, status])
+  @@index([employeeId])
+  @@index([status])
 }
 
 model Payroll {
   id                String   @id @default(cuid())
-  employeeId        String
+  employeeId        String   @unique
   employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  wage              Float    @default(0)
-  basicSalary       Float    @default(0)
-  hra               Float    @default(0)
-  standardAllowance Float    @default(0)
-  performanceBonus  Float    @default(0)
-  lta               Float    @default(0)
-  fixedAllowance    Float    @default(0)
-  pfEmployee        Float    @default(0)
-  pfEmployer        Float    @default(0)
-  professionalTax   Float    @default(0)
-  netPayable        Float    @default(0)
+  wage              Float
+  basicSalary       Float
+  hra               Float
+  standardAllowance Float
+  performanceBonus  Float
+  lta               Float
+  fixedAllowance    Float
+  pfEmployee        Float
+  pfEmployer        Float
+  professionalTax   Float
+  netPayable        Float
+  payableDays       Int      @default(0)
+  totalWorkingDays  Int      @default(22)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
-
-  @@unique([employeeId])
 }
 
 model SalaryConfig {
-  id                    String   @id @default(cuid())
-  pfEmployeeRate        Float    @default(0.12)
-  pfEmployerRate        Float    @default(0.12)
-  professionalTax       Float    @default(200)
-  standardAllowance     Float    @default(4167)
-  performanceBonusRate  Float    @default(0.0833)
-  ltaRate               Float    @default(0.0833)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  pfEmployeeRate       Float    @default(0.12)
+  pfEmployerRate       Float    @default(0.12)
+  professionalTax      Float    @default(200)
+  standardAllowance    Float    @default(4167)
+  performanceBonusRate Float    @default(0.0833)
+  ltaRate              Float    @default(0.0833)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }

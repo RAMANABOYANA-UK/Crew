@@ -1,114 +1,164 @@
+/**
+ * Auth Helpers for API Routes
+ * 
+ * Merged P2 + P3 auth: uses P2's User→Employee relation structure
+ * with P3's role enforcement utilities.
+ */
+
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { supabase } from "./supabase";
+import { prisma } from "./prisma";
+import { Role } from "@/generated/prisma/client";
 
-export type Employee = {
-  id: string;
-  clerk_user_id: string;
-  login_id: string;
-  employee_id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  phone?: string | null;
-  address?: string | null;
-  department?: string | null;
-  designation?: string | null;
-  role: "EMPLOYEE" | "ADMIN" | "HR";
-  date_of_joining?: string | null;
-  status: string;
-  profile_picture?: string | null;
-  basic_salary?: number;
-  hra?: number;
-  allowances?: number;
-  created_at?: string;
-  updated_at?: string;
-};
+// P2's auth helpers
 
-export async function getCurrentEmployee(): Promise<Employee | null> {
+export async function getCurrentUser() {
   const { userId } = await auth();
   if (!userId) return null;
 
-  const { data, error } = await supabase
-    .from("employees")
-    .select("*")
-    .eq("clerk_user_id", userId)
-    .single();
-
-  if (error || !data) return null;
-  return data as Employee;
+  return prisma.user.findUnique({
+    where: { clerkId: userId },
+    include: { employee: true },
+  });
 }
 
-export async function requireAuth(): Promise<Employee> {
-  const employee = await getCurrentEmployee();
-  if (!employee) {
-    throw new Error("Unauthorized");
-  }
-  return employee;
+export async function requireAuth() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+  return user;
 }
 
-export async function requireAdmin(): Promise<Employee> {
-  const employee = await requireAuth();
-  if (employee.role !== "ADMIN" && employee.role !== "HR") {
-    throw new Error("Forbidden");
-  }
-  return employee;
+export async function requireAdmin() {
+  const user = await requireAuth();
+  if (user.role !== "ADMIN" && user.role !== "HR") throw new Error("Forbidden");
+  return user;
 }
 
-export async function requireRole(roles: string[]): Promise<Employee> {
-  const employee = await requireAuth();
-  if (!roles.includes(employee.role)) {
-    throw new Error("Forbidden");
-  }
-  return employee;
-}
-
-export async function syncEmployee() {
+export async function syncUser() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
   const email = clerkUser.emailAddresses[0]?.emailAddress;
   if (!email) return null;
 
-  // Check if employee already exists
-  const { data: existing } = await supabase
-    .from("employees")
-    .select("*")
-    .eq("clerk_user_id", clerkUser.id)
-    .single();
+  let user = await prisma.user.findUnique({
+    where: { clerkId: clerkUser.id },
+    include: { employee: true },
+  });
 
-  if (existing) {
-    return existing as Employee;
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        clerkId: clerkUser.id,
+        email,
+        role: Role.EMPLOYEE,
+        employee: {
+          create: {
+            firstName: clerkUser.firstName || "New",
+            lastName: clerkUser.lastName || "User",
+          },
+        },
+      },
+      include: { employee: true },
+    });
   }
 
-  // Create new employee
-  const firstName = clerkUser.firstName || "New";
-  const lastName = clerkUser.lastName || "User";
-  const year = new Date().getFullYear();
-  const random = Math.floor(1000 + Math.random() * 9000);
+  return user;
+}
 
-  const loginId = `OI${firstName.slice(0, 2).toUpperCase()}${lastName.slice(0, 2).toUpperCase()}${year}${random}`;
-  const employeeId = `EMP${Date.now().toString().slice(-4)}`;
+// P3's auth helpers (for attendance/leave/payroll routes)
 
-  const { data: newEmployee, error } = await supabase
-    .from("employees")
-    .insert({
-      clerk_user_id: clerkUser.id,
-      login_id: loginId,
-      employee_id: employeeId,
-      email,
-      first_name: firstName,
-      last_name: lastName,
-      role: "EMPLOYEE",
-      status: "ACTIVE",
-      date_of_joining: new Date().toISOString(),
-    })
-    .select()
-    .single();
+export interface AuthenticatedEmployee {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  role: Role;
+  department: string | null;
+  designation: string | null;
+  clerkId: string;
+}
 
-  if (error) {
-    console.error("Failed to create employee:", error);
-    return null;
+/**
+ * Get the currently authenticated employee from a request.
+ * Uses P2's User→Employee relation.
+ */
+export async function getCurrentEmployee(): Promise<AuthenticatedEmployee> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    throw new Response(
+      JSON.stringify({ error: "Unauthorized. Please sign in." }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
   }
 
-  return newEmployee as Employee;
+  const user = await prisma.user.findUnique({
+    where: { clerkId: userId },
+    include: { employee: true },
+  });
+
+  if (!user || !user.employee) {
+    throw new Response(
+      JSON.stringify({ error: "Employee profile not found. Contact your administrator." }),
+      { status: 404, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  return {
+    id: user.employee.id,
+    userId: user.id,
+    firstName: user.employee.firstName,
+    lastName: user.employee.lastName,
+    role: user.role,
+    department: user.employee.department,
+    designation: user.employee.designation,
+    clerkId: user.clerkId,
+  };
+}
+
+/**
+ * Require the current user to have one of the specified roles.
+ */
+export async function requireRole(
+  allowedRoles: Role[]
+): Promise<AuthenticatedEmployee> {
+  const employee = await getCurrentEmployee();
+
+  if (!allowedRoles.includes(employee.role)) {
+    throw new Response(
+      JSON.stringify({
+        error: "Forbidden. You do not have permission to access this resource.",
+        requiredRoles: allowedRoles,
+        yourRole: employee.role,
+      }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  return employee;
+}
+
+/**
+ * Require the current user to be either the target employee or an Admin/HR.
+ */
+export async function requireSameEmployeeOrAdmin(
+  targetEmployeeId: string
+): Promise<AuthenticatedEmployee> {
+  const employee = await getCurrentEmployee();
+
+  const isAdmin = employee.role === "ADMIN" || employee.role === "HR";
+  const isSameEmployee = employee.id === targetEmployeeId;
+
+  if (!isAdmin && !isSameEmployee) {
+    throw new Response(
+      JSON.stringify({ error: "Forbidden. You can only access your own records." }),
+      { status: 403, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  return employee;
+}
+
+export function isAdminOrHR(role: Role): boolean {
+  return role === "ADMIN" || role === "HR";
 }
