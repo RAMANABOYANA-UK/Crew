@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z, ZodError } from "zod";
-import { requireAuth } from "@/lib/auth";
+import { z } from "zod";
+import { requireAuth, handleApiError } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const updateSchema = z.object({
@@ -20,11 +20,8 @@ export async function GET() {
   try {
     const user = await requireAuth();
     return NextResponse.json({ success: true, data: user });
-  } catch {
-    return NextResponse.json(
-      { success: false, message: "Unauthorized" },
-      { status: 401 }
-    );
+  } catch (error) {
+    return handleApiError(error);
   }
 }
 
@@ -57,17 +54,13 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: updated });
-  } catch (error: unknown) {
-    if (error instanceof ZodError) {
+  } catch (error: any) {
+    if (error?.name === "ZodError") {
       return NextResponse.json(
-        { success: false, message: error.issues },
+        { success: false, message: error.errors },
         { status: 400 }
       );
     }
-    console.error(error);
-    return NextResponse.json(
-      { success: false, message: "Update failed" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

@@ -12,10 +12,14 @@ import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import { computeSalaryBreakdown, DEFAULT_SALARY_CONFIG } from "../src/lib/salary";
 
-const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
+const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL!;
+const isLocal =
+  connectionString.includes("localhost") ||
+  connectionString.includes("127.0.0.1");
+
 const pool = new Pool({
   connectionString,
-  ssl: connectionString?.includes("localhost") ? false : { rejectUnauthorized: false },
+  ssl: isLocal ? false : { rejectUnauthorized: false },
   max: 1,
 });
 const adapter = new PrismaPg(pool);
@@ -24,23 +28,23 @@ const prisma = new PrismaClient({ adapter });
 // ─── Employee Data ──────────────────────────────────────
 
 const employees = [
-  { firstName: "Rajesh", lastName: "Kumar", email: "rajesh.kumar@dayflow.com", role: "ADMIN" as const, department: "Management", designation: "HR Director", joinDate: new Date("2021-03-15"), phone: "+91-9876543210", wage: 120000 },
-  { firstName: "Priya", lastName: "Sharma", email: "priya.sharma@dayflow.com", role: "HR" as const, department: "Human Resources", designation: "HR Manager", joinDate: new Date("2021-06-01"), phone: "+91-9876543211", wage: 95000 },
-  { firstName: "Amit", lastName: "Patel", email: "amit.patel@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "Senior Developer", joinDate: new Date("2022-01-10"), phone: "+91-9876543212", wage: 85000 },
-  { firstName: "Sneha", lastName: "Reddy", email: "sneha.reddy@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "Frontend Developer", joinDate: new Date("2022-07-20"), phone: "+91-9876543213", wage: 72000 },
-  { firstName: "Vikram", lastName: "Singh", email: "vikram.singh@dayflow.com", role: "EMPLOYEE" as const, department: "Design", designation: "UI/UX Designer", joinDate: new Date("2023-02-14"), phone: "+91-9876543214", wage: 68000 },
-  { firstName: "Ananya", lastName: "Gupta", email: "ananya.gupta@dayflow.com", role: "EMPLOYEE" as const, department: "Marketing", designation: "Marketing Executive", joinDate: new Date("2023-05-08"), phone: "+91-9876543215", wage: 55000 },
-  { firstName: "Rohan", lastName: "Joshi", email: "rohan.joshi@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "Backend Developer", joinDate: new Date("2023-09-01"), phone: "+91-9876543216", wage: 78000 },
-  { firstName: "Meera", lastName: "Nair", email: "meera.nair@dayflow.com", role: "EMPLOYEE" as const, department: "Finance", designation: "Accountant", joinDate: new Date("2024-01-15"), phone: "+91-9876543217", wage: 60000 },
-  { firstName: "Karthik", lastName: "Menon", email: "karthik.menon@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "DevOps Engineer", joinDate: new Date("2024-04-01"), phone: "+91-9876543218", wage: 82000 },
-  { firstName: "Divya", lastName: "Bhat", email: "divya.bhat@dayflow.com", role: "EMPLOYEE" as const, department: "Sales", designation: "Sales Associate", joinDate: new Date("2024-08-10"), phone: "+91-9876543219", wage: 48000 },
+  { firstName: "Rajesh", lastName: "Kumar", email: "rajesh.kumar@dayflow.com", role: "ADMIN" as const, department: "Management", designation: "HR Director", dateOfJoining: new Date("2021-03-15"), phone: "+91-9876543210", wage: 120000 },
+  { firstName: "Priya", lastName: "Sharma", email: "priya.sharma@dayflow.com", role: "HR" as const, department: "Human Resources", designation: "HR Manager", dateOfJoining: new Date("2021-06-01"), phone: "+91-9876543211", wage: 95000 },
+  { firstName: "Amit", lastName: "Patel", email: "amit.patel@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "Senior Developer", dateOfJoining: new Date("2022-01-10"), phone: "+91-9876543212", wage: 85000 },
+  { firstName: "Sneha", lastName: "Reddy", email: "sneha.reddy@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "Frontend Developer", dateOfJoining: new Date("2022-07-20"), phone: "+91-9876543213", wage: 72000 },
+  { firstName: "Vikram", lastName: "Singh", email: "vikram.singh@dayflow.com", role: "EMPLOYEE" as const, department: "Design", designation: "UI/UX Designer", dateOfJoining: new Date("2023-02-14"), phone: "+91-9876543214", wage: 68000 },
+  { firstName: "Ananya", lastName: "Gupta", email: "ananya.gupta@dayflow.com", role: "EMPLOYEE" as const, department: "Marketing", designation: "Marketing Executive", dateOfJoining: new Date("2023-05-08"), phone: "+91-9876543215", wage: 55000 },
+  { firstName: "Rohan", lastName: "Joshi", email: "rohan.joshi@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "Backend Developer", dateOfJoining: new Date("2023-09-01"), phone: "+91-9876543216", wage: 78000 },
+  { firstName: "Meera", lastName: "Nair", email: "meera.nair@dayflow.com", role: "EMPLOYEE" as const, department: "Finance", designation: "Accountant", dateOfJoining: new Date("2024-01-15"), phone: "+91-9876543217", wage: 60000 },
+  { firstName: "Karthik", lastName: "Menon", email: "karthik.menon@dayflow.com", role: "EMPLOYEE" as const, department: "Engineering", designation: "DevOps Engineer", dateOfJoining: new Date("2024-04-01"), phone: "+91-9876543218", wage: 82000 },
+  { firstName: "Divya", lastName: "Bhat", email: "divya.bhat@dayflow.com", role: "EMPLOYEE" as const, department: "Sales", designation: "Sales Associate", dateOfJoining: new Date("2024-08-10"), phone: "+91-9876543219", wage: 48000 },
 ];
 
-function generateLoginId(firstName: string, lastName: string, joinDate: Date, serial: number): string {
+function generateLoginId(firstName: string, lastName: string, dateOfJoining: Date, serial: number): string {
   const prefix = "OI";
   const firstTwo = firstName.substring(0, 2).toUpperCase();
   const lastTwo = lastName.substring(0, 2).toUpperCase();
-  const joinYear = joinDate.getFullYear().toString();
+  const joinYear = dateOfJoining.getFullYear().toString();
   return `${prefix}${firstTwo}${lastTwo}${joinYear}${serial.toString().padStart(4, "0")}`;
 }
 
@@ -78,7 +82,7 @@ async function main() {
   for (let i = 0; i < employees.length; i++) {
     const emp = employees[i];
     const employeeId = `EMP${(i + 1).toString().padStart(3, "0")}`;
-    const loginId = generateLoginId(emp.firstName, emp.lastName, emp.joinDate, i + 1);
+    const loginId = generateLoginId(emp.firstName, emp.lastName, emp.dateOfJoining, i + 1);
 
     const passwordHash = bcrypt.hashSync("Dayflow2026!", 10);
     const mustChangePassword = i !== 0; // Rajesh Kumar has already changed password, others are in first-login state
@@ -105,8 +109,7 @@ async function main() {
         phone: emp.phone,
         department: emp.department,
         designation: emp.designation,
-        dateOfJoining: emp.joinDate,
-        joinDate: emp.joinDate,
+        dateOfJoining: emp.dateOfJoining,
         role: emp.role,
         paidLeaveBalance: 12,
         sickLeaveBalance: 6,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, handleApiError } from "@/lib/auth";
 
 // GET /api/employees/status — Admin/HR gets status dots for all employees
 export async function GET() {
@@ -96,16 +96,6 @@ export async function GET() {
       data: { employees: statuses, summary },
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
-    }
-    console.error("Employee status error:", error);
-    return NextResponse.json(
-      { success: false, message: "Internal server error" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

@@ -56,7 +56,7 @@ export const onboardEmployeeSchema = z.object({
   designation: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
-  joinDate: z
+  dateOfJoining: z
     .string()
     .or(z.date())
     .transform((val) => new Date(val))
