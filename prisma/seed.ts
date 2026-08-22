@@ -8,6 +8,7 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
+import bcrypt from "bcryptjs";
 import { computeSalaryBreakdown, DEFAULT_SALARY_CONFIG } from "../src/lib/salary";
 
 const pool = new Pool({
@@ -67,11 +68,18 @@ async function main() {
     const employeeId = `EMP${(i + 1).toString().padStart(3, "0")}`;
     const loginId = generateLoginId(emp.firstName, emp.lastName, emp.joinDate, i + 1);
 
+    const passwordHash = bcrypt.hashSync("Dayflow2026!", 10);
+    const mustChangePassword = i !== 0; // Rajesh Kumar has already changed password, others are in first-login state
+
     const user = await prisma.user.create({
       data: {
         clerkId: `clerk_seed_${employeeId.toLowerCase()}`,
+        loginId,
         email: emp.email,
+        passwordHash,
         role: emp.role === "HR" ? "ADMIN" : emp.role,
+        mustChangePassword,
+        isFirstLogin: mustChangePassword,
       },
     });
 
