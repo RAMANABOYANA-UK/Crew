@@ -1,8 +1,8 @@
 /**
  * Seed Data Script for Dayflow HRMS
  * 
- * Creates Employees (Clerk-linked via clerkUserId, with credential User accounts
- * for the first-login password workflow) plus P3 Attendance/Leave/Payroll data.
+ * Creates Employees (credential User accounts for pure JWT auth)
+ * plus P3 Attendance, Leave, AttendanceCorrections, JobHistory, and Payroll data.
  */
 
 import "dotenv/config";
@@ -12,9 +12,10 @@ import { Pool } from "pg";
 import bcrypt from "bcryptjs";
 import { computeSalaryBreakdown, DEFAULT_SALARY_CONFIG } from "../src/lib/salary";
 
+const connectionString = process.env.DATABASE_URL || process.env.DIRECT_URL;
 const pool = new Pool({
-  connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
+  connectionString,
+  ssl: connectionString?.includes("localhost") ? false : { rejectUnauthorized: false },
   max: 1,
 });
 const adapter = new PrismaPg(pool);
@@ -43,16 +44,26 @@ function generateLoginId(firstName: string, lastName: string, joinDate: Date, se
   return `${prefix}${firstTwo}${lastTwo}${joinYear}${serial.toString().padStart(4, "0")}`;
 }
 
+async function safeDelete(fn: () => Promise<any>) {
+  try {
+    await fn();
+  } catch {
+    // Ignore error if table does not exist yet
+  }
+}
+
 async function main() {
   console.log("🌱 Starting seed...\n");
 
-  // Clean existing data (order matters for FK constraints)
-  await prisma.attendance.deleteMany();
-  await prisma.leaveRequest.deleteMany();
-  await prisma.payroll.deleteMany();
-  await prisma.employee.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.salaryConfig.deleteMany();
+  // Clean existing data safely
+  await safeDelete(() => prisma.attendanceCorrection.deleteMany());
+  await safeDelete(() => prisma.employeeJobHistory.deleteMany());
+  await safeDelete(() => prisma.attendance.deleteMany());
+  await safeDelete(() => prisma.leaveRequest.deleteMany());
+  await safeDelete(() => prisma.payroll.deleteMany());
+  await safeDelete(() => prisma.employee.deleteMany());
+  await safeDelete(() => prisma.user.deleteMany());
+  await safeDelete(() => prisma.salaryConfig.deleteMany());
   console.log("🗑️  Cleaned existing data.\n");
 
   // 1. Create SalaryConfig
@@ -61,7 +72,7 @@ async function main() {
   });
   console.log("⚙️  Created SalaryConfig.\n");
 
-  // 2. Create Employees (with linked credential User accounts)
+  // 2. Create Employees (with credential User accounts)
   const createdEmployees: Array<{ id: string; userId: string; wage: number; firstName: string; lastName: string }> = [];
 
   for (let i = 0; i < employees.length; i++) {
@@ -74,7 +85,6 @@ async function main() {
 
     const user = await prisma.user.create({
       data: {
-        clerkId: `clerk_seed_${employeeId.toLowerCase()}`,
         loginId,
         email: emp.email,
         passwordHash,
@@ -86,7 +96,6 @@ async function main() {
 
     const employee = await prisma.employee.create({
       data: {
-        clerkUserId: `clerk_seed_${employeeId.toLowerCase()}`,
         userId: user.id,
         loginId,
         employeeId,
@@ -99,6 +108,21 @@ async function main() {
         dateOfJoining: emp.joinDate,
         joinDate: emp.joinDate,
         role: emp.role,
+        paidLeaveBalance: 12,
+        sickLeaveBalance: 6,
+        unpaidLeaveBalance: 0,
+      },
+    });
+
+    // Create initial JobHistory entry
+    await prisma.employeeJobHistory.create({
+      data: {
+        employeeId: employee.id,
+        field: "status",
+        oldValue: null,
+        newValue: "ACTIVE",
+        reason: "Initial onboarding seed",
+        changedBy: user.id,
       },
     });
 
@@ -130,7 +154,6 @@ async function main() {
       let checkOut: Date | null = null;
       let hoursWorked: number | null = null;
 
-      // Today: mix for demo
       if (currentDate.getTime() === today.getTime()) {
         if (empIndex < 5) { status = "PRESENT"; checkIn = new Date(today); checkIn.setUTCHours(9, 15); }
         else if (empIndex === 5) { status = "ON_LEAVE"; }
@@ -187,7 +210,20 @@ async function main() {
   }
   console.log("");
 
-  // 5. Create Payroll Records
+  // 5. Create Sample Attendance Corrections
+  await prisma.attendanceCorrection.create({
+    data: {
+      employeeId: createdEmployees[2].id,
+      date: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2)),
+      requestedCheckIn: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2, 9, 0)),
+      requestedCheckOut: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2, 17, 30)),
+      reason: "Forgot to check out at end of day due to client emergency meeting.",
+      status: "PENDING",
+    },
+  });
+  console.log(`⏱️  Created sample attendance correction request for ${createdEmployees[2].firstName} ${createdEmployees[2].lastName}.\n`);
+
+  // 6. Create Payroll Records
   for (const emp of createdEmployees) {
     const breakdown = computeSalaryBreakdown(emp.wage, DEFAULT_SALARY_CONFIG);
     const monthAttendance = attendanceData.filter(a => a.employeeId === emp.id && a.date.getMonth() === today.getMonth());
@@ -211,11 +247,11 @@ async function main() {
     console.log(`💰 Payroll for ${emp.firstName.padEnd(10)} — Wage: ₹${emp.wage.toLocaleString("en-IN").padStart(8)}, Net: ₹${breakdown.netPayable.toLocaleString("en-IN").padStart(8)}`);
   }
 
-  // 6. Create Sample Notifications
+  // 7. Create Sample Notifications
   const adminUser = createdEmployees[0];
   const hrUser = createdEmployees[1];
-  const emp1 = createdEmployees[2]; // Amit Patel
-  const emp2 = createdEmployees[3]; // Sneha Reddy
+  const emp1 = createdEmployees[2];
+  const emp2 = createdEmployees[3];
 
   const sampleNotifications = [
     { userId: adminUser.userId, title: "New Leave Request Submitted", message: "Amit Patel has applied for 3 days of PAID leave.", type: "LEAVE_SUBMITTED" as const, isRead: false },
@@ -230,62 +266,6 @@ async function main() {
     await prisma.notification.create({ data: n });
   }
   console.log(`\n🔔 Seeded ${sampleNotifications.length} sample notifications.`);
-
-  // 7. Create Sample Audit Logs
-  const sampleAuditLogs = [
-    {
-      actorId: adminUser.userId,
-      actorEmail: "rajesh.kumar@dayflow.com",
-      action: "LEAVE_APPROVED",
-      entityType: "LeaveRequest",
-      entityId: "leave_seed_001",
-      oldValues: { status: "PENDING" },
-      newValues: { status: "APPROVED", adminComment: "Approved by Rajesh" },
-      ipAddress: "192.168.1.10",
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-    },
-    {
-      actorId: adminUser.userId,
-      actorEmail: "rajesh.kumar@dayflow.com",
-      action: "EMPLOYEE_CREATED",
-      entityType: "Employee",
-      entityId: emp1.id,
-      newValues: { firstName: "Amit", lastName: "Patel", department: "Engineering", wage: 85000 },
-      ipAddress: "192.168.1.10",
-      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-    },
-    {
-      actorId: hrUser.userId,
-      actorEmail: "priya.sharma@dayflow.com",
-      action: "WAGE_UPDATED",
-      entityType: "Payroll",
-      entityId: "payroll_seed_002",
-      oldValues: { wage: 70000, netPayable: 65600 },
-      newValues: { wage: 72000, netPayable: 67480 },
-      ipAddress: "192.168.1.15",
-      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-    },
-  ];
-
-  for (const log of sampleAuditLogs) {
-    await prisma.auditLog.create({ data: log });
-  }
-  console.log(`📜 Seeded ${sampleAuditLogs.length} audit log entries.`);
-
-  // 8. Create Sample Payroll Anomaly
-  const anomalyEmp = createdEmployees[9]; // Divya Bhat (lowest wage)
-  await prisma.payrollAnomaly.create({
-    data: {
-      employeeId: anomalyEmp.id,
-      ruleCode: "ATTENDANCE_MISMATCH",
-      severity: "LOW",
-      title: "Sample Verification Flag",
-      description: "Payable days verified against bi-weekly shift logs.",
-      details: { payableDays: 22, verified: true },
-      isResolved: false,
-    },
-  });
-  console.log(`⚠️  Seeded 1 sample payroll anomaly flag.`);
 
   console.log("\n✅ Seed completed successfully!");
 }
