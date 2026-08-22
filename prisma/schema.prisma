@@ -53,6 +53,12 @@ enum NotificationType {
   SYSTEM
 }
 
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 // ─── P2 Models (Auth / Profile / Core) ──────────────────
 
 model User {
@@ -105,10 +111,11 @@ model Employee {
   leaveRequests      LeaveRequest[]
   corrections        AttendanceCorrection[]
   jobHistory         EmployeeJobHistory[]
+  payrollAnomalies   PayrollAnomaly[]
   payroll            Payroll?
 }
 
-// ─── P3 Models (Attendance / Leave / Payroll / Corrections / Audit) ───────────
+// ─── P3 Models ──────────────────────────────────────────
 
 model Attendance {
   id          String                 @id @default(cuid())
@@ -231,4 +238,39 @@ model Notification {
 
   @@index([userId])
   @@index([isRead])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+model PayrollAnomaly {
+  id          String          @id @default(cuid())
+  payrollId   String?
+  employeeId  String
+  employee    Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type        String?
+  ruleCode    String?
+  title       String?
+  severity    AnomalySeverity @default(MEDIUM)
+  description String
+  details     Json?
+  isResolved  Boolean         @default(false)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime        @default(now())
+
+  @@index([employeeId])
+  @@index([isResolved])
 }
