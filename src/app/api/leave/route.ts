@@ -1,21 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { getCurrentEmployee } from "@/lib/auth";
 import { leaveRequestSchema } from "@/lib/validations/leave";
-import { applyLeaveApproval } from "@/lib/leave-approver";
-import { scopeToSelf } from "@/lib/scope";
 
-// POST /api/leave — Employee applies for leave (with Smart Auto-Approval for 1-day low-risk requests)
+// POST /api/leave — Employee applies for leave
 // GET  /api/leave — Employee gets their own leave requests
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireAuth();
-    const employee = session.employee;
-
+    const employee = await getCurrentEmployee();
     if (!employee) {
       return NextResponse.json(
-        { success: false, message: "Employee profile not found" },
-        { status: 404 }
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
       );
     }
 
@@ -109,10 +105,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Smart Auto-Approval Rule: 1-day low-risk requests with sufficient balance are auto-approved
-    const autoApprove = totalDays <= 1 && availableBalance >= totalDays && leaveType !== "UNPAID";
-
-    let leaveRequest = await prisma.leaveRequest.create({
+    const leaveRequest = await prisma.leaveRequest.create({
       data: {
         employeeId: employee.id,
         leaveType,
@@ -120,38 +113,30 @@ export async function POST(request: NextRequest) {
         endDate: end,
         totalDays,
         reason,
-        status: autoApprove ? "APPROVED" : "PENDING",
-        reviewedBy: autoApprove ? "SYSTEM" : null,
-        reviewedAt: autoApprove ? new Date() : null,
+        status: "PENDING",
       },
     });
 
-    if (autoApprove) {
-      leaveRequest = (await applyLeaveApproval(leaveRequest.id, "SYSTEM")) as typeof leaveRequest;
-    } else {
-      // Notify all Admins and HRs about the new pending leave submission
-      try {
-        const { notifyAdmins } = await import("@/lib/notifications");
-        await notifyAdmins({
-          title: "New Leave Request Submitted",
-          message: `${employee.firstName} ${employee.lastName} has submitted a ${leaveType} leave request for ${totalDays} day(s).`,
-          type: "LEAVE_SUBMITTED",
-          link: "/dashboard/leave",
-          emailSubject: `[Dayflow HRMS] New Leave Request: ${employee.firstName} ${employee.lastName}`,
-          emailText: `Hello Admin/HR,\n\n${employee.firstName} ${employee.lastName} has applied for ${leaveType} leave from ${start.toISOString().split("T")[0]} to ${end.toISOString().split("T")[0]} (${totalDays} day(s)).\n\nReason: ${reason}\n\nPlease review it in the Dayflow HRMS portal.`,
-        });
-      } catch (notifyErr) {
-        console.error("Failed to dispatch leave notification to admins:", notifyErr);
-      }
+    // Notify all Admins and HRs about the new leave submission
+    try {
+      const { notifyAdmins } = await import("@/lib/notifications");
+      await notifyAdmins({
+        title: "New Leave Request Submitted",
+        message: `${employee.firstName} ${employee.lastName} has submitted a ${leaveType} leave request for ${totalDays} day(s).`,
+        type: "LEAVE_SUBMITTED",
+        link: `/dashboard/leave`,
+        emailSubject: `[Dayflow HRMS] New Leave Request: ${employee.firstName} ${employee.lastName}`,
+        emailText: `Hello Admin/HR,\n\n${employee.firstName} ${employee.lastName} has applied for ${leaveType} leave from ${start.toISOString().split("T")[0]} to ${end.toISOString().split("T")[0]} (${totalDays} day(s)).\n\nReason: ${reason}\n\nPlease review it in the Dayflow HRMS portal.`,
+      });
+    } catch (notifyErr) {
+      console.error("Failed to dispatch leave notification to admins:", notifyErr);
     }
 
     return NextResponse.json(
       {
         success: true,
         data: leaveRequest,
-        message: autoApprove
-          ? "Leave request auto-approved by system."
-          : "Leave request submitted for review.",
+        message: "Leave request submitted.",
       },
       { status: 201 }
     );
@@ -166,23 +151,19 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireAuth();
-
-    const searchParams = request.nextUrl.searchParams;
-    const requestedEmployeeId = searchParams.get("employeeId");
-    const targetEmployeeId = scopeToSelf(session, requestedEmployeeId);
-
-    if (!targetEmployeeId) {
+    const employee = await getCurrentEmployee();
+    if (!employee) {
       return NextResponse.json(
-        { success: false, message: "Employee profile not found" },
-        { status: 404 }
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
       );
     }
 
+    const searchParams = request.nextUrl.searchParams;
     const statusFilter = searchParams.get("status");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { employeeId: targetEmployeeId };
+    const where: any = { employeeId: employee.id };
     if (statusFilter) {
       where.status = statusFilter;
     }

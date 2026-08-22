@@ -45,20 +45,15 @@ export async function GET(req: NextRequest) {
         summary: {
           totalLive: liveAnomalies.length,
           totalRecorded: dbAnomalies.length,
-          unresolvedCount: dbAnomalies.filter((a: { isResolved: boolean }) => !a.isResolved).length,
+          unresolvedCount: dbAnomalies.filter((a) => !a.isResolved).length,
         },
       },
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
-    }
+    if (error instanceof Response) return error;
     console.error("Fetch payroll anomalies error:", error);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: false, error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -74,7 +69,7 @@ export async function PATCH(req: NextRequest) {
 
     if (!id) {
       return NextResponse.json(
-        { success: false, message: "Anomaly ID is required" },
+        { success: false, error: "Anomaly ID is required" },
         { status: 400 }
       );
     }
@@ -90,15 +85,10 @@ export async function PATCH(req: NextRequest) {
       message: `Anomaly marked as ${isResolved ? "resolved" : "unresolved"}.`,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "Forbidden") {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
-    }
+    if (error instanceof Response) return error;
     console.error("Resolve anomaly error:", error);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: false, error: "Internal server error" },
       { status: 500 }
     );
   }

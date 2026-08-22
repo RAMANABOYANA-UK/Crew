@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { leaveReviewSchema } from "@/lib/validations/leave";
-import { applyLeaveApproval } from "@/lib/leave-approver";
 
 // PATCH /api/leave/[id]/review — Admin/HR approves or rejects a leave request
 export async function PATCH(
@@ -53,25 +52,26 @@ export async function PATCH(
       );
     }
 
-    if (status === "APPROVED") {
-      const updated = await applyLeaveApproval(id, admin.id, adminComment);
-      return NextResponse.json({
-        success: true,
-        data: updated,
-        message: "Leave request approved.",
-      });
-    }
-
-    // Reject leave request
+    // Update the leave request
     const updated = await prisma.leaveRequest.update({
       where: { id },
       data: {
-        status: "REJECTED",
+        status,
         adminComment: adminComment || null,
         reviewedBy: admin.employee?.loginId || admin.id,
         reviewedAt: new Date(),
       },
-      include: { employee: true },
+      include: {
+        employee: {
+          select: {
+            userId: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            employeeId: true,
+          },
+        },
+      },
     });
 
     // Notify the employee about the review decision
@@ -153,15 +153,13 @@ export async function PATCH(
           },
           create: record,
         });
-      } catch (err) {
-        console.error("Failed to send rejection notification:", err);
       }
     }
 
     return NextResponse.json({
       success: true,
       data: updated,
-      message: "Leave request rejected.",
+      message: `Leave request ${status.toLowerCase()}.`,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {

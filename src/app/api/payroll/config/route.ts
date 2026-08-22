@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { updateSalaryConfigSchema } from "@/lib/validations/payroll";
 
 // GET /api/payroll/config — Admin/HR gets current salary configuration
@@ -23,13 +23,14 @@ export async function GET() {
             performanceBonusRate: 0.0833,
             ltaRate: 0.0833,
           },
+          isDefault: true,
         },
       });
     }
 
     return NextResponse.json({
       success: true,
-      data: { config },
+      data: { config, isDefault: false },
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
@@ -38,7 +39,7 @@ export async function GET() {
         { status: 403 }
       );
     }
-    console.error("Salary config fetch error:", error);
+    console.error("Config fetch error:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 }
@@ -46,8 +47,8 @@ export async function GET() {
   }
 }
 
-// PUT /api/payroll/config — Admin/HR updates salary configuration rules
-export async function PUT(request: NextRequest) {
+// PATCH /api/payroll/config — Admin/HR updates salary configuration
+export async function PATCH(request: NextRequest) {
   try {
     const admin = await requireAdmin();
 
@@ -65,6 +66,7 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Upsert — create if doesn't exist, update if it does
     const existing = await prisma.salaryConfig.findFirst();
 
     let config;
@@ -105,7 +107,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: config,
-      message: "Salary configuration updated successfully.",
+      message: "Salary configuration updated.",
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
@@ -114,7 +116,7 @@ export async function PUT(request: NextRequest) {
         { status: 403 }
       );
     }
-    console.error("Salary config update error:", error);
+    console.error("Config update error:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 }

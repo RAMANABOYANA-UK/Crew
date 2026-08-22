@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getCurrentEmployee } from "@/lib/auth";
+import { syncEmployee } from "@/lib/auth";
 
 export async function POST() {
   try {
-    const employee = await getCurrentEmployee();
+    const employee = await syncEmployee();
 
     if (!employee) {
       return NextResponse.json(
