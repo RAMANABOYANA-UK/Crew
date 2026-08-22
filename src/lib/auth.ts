@@ -65,6 +65,8 @@ export async function syncUser() {
   return user;
 }
 
+export const syncEmployee = syncUser;
+
 // P3's auth helpers (for attendance/leave/payroll routes)
 
 export interface AuthenticatedEmployee {
