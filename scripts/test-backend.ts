@@ -403,7 +403,7 @@ async function runTests() {
 
     const fetchedLog = await prisma.auditLog.findUnique({ where: { id: logEntry!.id } });
     assert(fetchedLog !== null, "Audit log entry is persisted in database");
-    assert(JSON.stringify(fetchedLog?.newValues).includes("PUBLISHED"), "Audit log stores structured JSON values");
+    assert(JSON.stringify(fetchedLog?.details).includes("PUBLISHED"), "Audit log stores structured JSON values");
 
     const countLogs = await prisma.auditLog.count();
     assert(countLogs >= 4, `Database contains audit trail entries (found ${countLogs})`);

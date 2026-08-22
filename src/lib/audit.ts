@@ -7,7 +7,7 @@
 
 import { headers } from "next/headers";
 import { prisma } from "./prisma";
-import { Prisma } from "../generated/prisma/client";
+import { Prisma } from "@prisma/client";
 
 export interface LogAuditOptions {
   actorId?: string | null;
@@ -45,13 +45,15 @@ export async function logAuditEvent(options: LogAuditOptions) {
 
     const log = await prisma.auditLog.create({
       data: {
-        actorId: options.actorId || null,
-        actorEmail: options.actorEmail || null,
+        userId: options.actorId || null,
         action: options.action,
-        entityType: options.entityType,
+        entity: options.entityType,
         entityId: options.entityId || null,
-        oldValues: options.oldValues ? options.oldValues : undefined,
-        newValues: options.newValues ? options.newValues : undefined,
+        details: JSON.stringify({
+          actorEmail: options.actorEmail,
+          oldValues: options.oldValues,
+          newValues: options.newValues,
+        }),
         ipAddress: ip || "127.0.0.1",
         userAgent: ua || null,
       },
