@@ -19,8 +19,8 @@ export function ProfilePage() {
   const { user: me, role } = useSession();
   const navigate = useNavigate();
   const { id } = useParams();
-  const isOwn = !id || id === me?.id;
-  const employeeId = isOwn ? me!.id : (id as string);
+  const isOwn = !id || id === me?.id || role === 'employee';
+  const employeeId = (role === 'employee' || !id) ? me!.id : (id as string);
 
   const empQ = useQuery({ queryKey: QK.employee(employeeId), queryFn: () => api.getEmployee(employeeId) });
   const employeesQ = useQuery({ queryKey: QK.employees, queryFn: () => api.getEmployees() });

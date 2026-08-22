@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -17,16 +17,27 @@ const schema = z.object({
 });
 type FormVals = z.infer<typeof schema>;
 
+const DEMO_CREDS = {
+  hr: { identifier: 'aarav@crewline.com', password: 'Crew@1234' },
+  employee: { identifier: 'priya@company.com', password: 'Crew@1234' },
+} as const;
+
 export function SignIn() {
-  const [mode, setMode] = useState<'app' | 'web'>('app');
+  const [role, setRole] = useState<'hr' | 'employee'>('employee');
   const [apiError, setApiError] = useState('');
   const navigate = useNavigate();
   const toast = useToasts((s) => s.toast);
   const setSession = useSession((s) => s.setSession);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormVals>({
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormVals>({
     resolver: zodResolver(schema),
   });
+
+  // Picking a role pre-fills its demo credentials — one click from signing in.
+  useEffect(() => {
+    setValue('identifier', DEMO_CREDS[role].identifier);
+    setValue('password', DEMO_CREDS[role].password);
+  }, [role, setValue]);
 
   async function onSubmit(v: FormVals) {
     setApiError('');
@@ -45,13 +56,13 @@ export function SignIn() {
     <AuthLayout title="Sign In">
       <Segmented
         options={[
-          { value: 'app', label: 'App Login' },
-          { value: 'web', label: 'Web Login' },
+          { value: 'hr', label: 'HR' },
+          { value: 'employee', label: 'Employee' },
         ]}
-        value={mode}
-        onChange={setMode}
+        value={role}
+        onChange={setRole}
         className="mb-5 w-full"
-        ariaLabel="Login method"
+        ariaLabel="Sign in as"
       />
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
@@ -60,8 +71,8 @@ export function SignIn() {
             {apiError}
           </div>
         )}
-        <Field label={mode === 'app' ? 'Login ID' : 'Email'} required error={errors.identifier?.message}>
-          <Input {...register('identifier')} placeholder={mode === 'app' ? 'e.g. 0CLTPRSH20240003' : 'you@company.com'} autoComplete="username" invalid={!!errors.identifier} />
+        <Field label="Email or Login ID" required error={errors.identifier?.message}>
+          <Input {...register('identifier')} placeholder="you@company.com · e.g. 0CLTPRSH20240003" autoComplete="username" invalid={!!errors.identifier} />
         </Field>
         <Field label="Password" required error={errors.password?.message}>
           <PasswordInput {...register('password')} placeholder="••••••••" autoComplete="current-password" invalid={!!errors.password} />

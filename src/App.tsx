@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { useSession } from '@/lib/store';
 import { ToastStack } from '@/components/ui/Feedback';
 import { Shell } from '@/app/Shell';
@@ -37,7 +37,7 @@ export default function App() {
           <Route path="/" element={<HomeRedirect />} />
           <Route path="/dashboard" element={<EmployeeDashboard />} />
           <Route path="/employees" element={<EmployeeRoleGate />} />
-          <Route path="/employees/:id" element={<ProfilePage />} />
+          <Route path="/employees/:id" element={<EmployeeProfileGate />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/attendance" element={<AttendanceGate />} />
           <Route path="/time-off" element={<TimeOffGate />} />
@@ -72,4 +72,13 @@ function AttendanceGate() {
 function TimeOffGate() {
   const { role } = useSession();
   return role === 'admin' ? <AdminTimeOff /> : <MyTimeOff />;
+}
+
+function EmployeeProfileGate() {
+  const { role, user } = useSession();
+  const { id } = useParams();
+  if (role === 'employee' && id && id !== user?.id) {
+    return <Navigate to="/profile" replace />;
+  }
+  return <ProfilePage />;
 }

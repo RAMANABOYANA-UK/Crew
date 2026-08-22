@@ -34,7 +34,7 @@ const schema = z
 type FormVals = z.infer<typeof schema>;
 
 export function SignUp() {
-  const [mode, setMode] = useState<'app' | 'web'>('app');
+  const [role, setRole] = useState<'hr' | 'employee'>('hr');
   const [logo, setLogo] = useState<string | null>(null);
   const [logoName, setLogoName] = useState('');
   const navigate = useNavigate();
@@ -72,14 +72,19 @@ export function SignUp() {
     <AuthLayout title="Create your company" subtitle="First Admin / company registration. Employees are added by HR — not self-service.">
       <Segmented
         options={[
-          { value: 'app', label: 'App Login' },
-          { value: 'web', label: 'Web Login' },
+          { value: 'hr', label: 'HR' },
+          { value: 'employee', label: 'Employee' },
         ]}
-        value={mode}
-        onChange={setMode}
+        value={role}
+        onChange={setRole}
         className="mb-5 w-full"
-        ariaLabel="Sign-up method"
+        ariaLabel="Registering as"
       />
+      {role === 'employee' && (
+        <p className="-mt-3 text-[12px] leading-snug text-muted">
+          Employees can’t self-register — HR provisions them after sign-up. Continue as the company Admin.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
         <div className="flex items-end gap-3">
