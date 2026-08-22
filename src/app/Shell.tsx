@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Bell, ChevronDown, LogOut, Menu, Settings as SettingsIcon,
@@ -13,6 +13,12 @@ import { useSession } from '@/lib/store';
 import { Avatar } from '@/components/ui/Avatar';
 import { ShellStatusDot } from '@/components/ui/Feedback';
 import { CheckInOutWidget } from '@/features/attendance/CheckInOutWidget';
+import { AddEmployeeModal } from '@/features/employees/AddEmployeeModal';
+import {
+  AuditLogsModal, PayrollAnomaliesModal, SalaryMasterModal,
+  ShiftAllocationModal, HRPoliciesModal, BroadcastModal,
+  HolidayCalendarModal, HelpdeskModal, TrainingModal, ProjectsModal
+} from '@/features/tools/EnterpriseModals';
 import type { Activity, Company, Employee } from '@/types';
 
 const ACTIVITY_ICON: Record<Activity['icon'], React.ReactNode> = {
@@ -27,12 +33,14 @@ const ACTIVITY_ICON: Record<Activity['icon'], React.ReactNode> = {
 export function Shell() {
   const { user, company, role } = useSession();
   const navigate = useNavigate();
+  const location = useLocation();
   const qc = useQueryClient();
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeModal, setActiveModal] = useState<string | null>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +67,6 @@ export function Shell() {
     navigate('/signin', { replace: true });
   }
 
-  // Dedicated navigation for HR / Admin
   const adminNavItems = [
     { to: '/employees', label: 'Employee Directory', icon: <UserPlus size={15} /> },
     { to: '/attendance', label: 'Company Attendance', icon: <Clock3 size={15} /> },
@@ -69,16 +76,15 @@ export function Shell() {
   ];
 
   const adminExtraItems = [
-    { label: 'Audit Logs', icon: <ShieldCheck size={15} /> },
-    { label: 'Payroll Anomalies', icon: <AlertTriangle size={15} /> },
-    { label: 'Company Salary Master', icon: <Award size={15} /> },
-    { label: 'Shift Allocation', icon: <Clock3 size={15} /> },
-    { label: 'HR Policies', icon: <FileText size={15} /> },
-    { label: 'Recruitment & Onboarding', icon: <Building2 size={15} /> },
-    { label: 'Broadcast Announcements', icon: <Megaphone size={15} /> },
+    { id: 'audit', label: 'Audit Logs', icon: <ShieldCheck size={15} className="text-[#4f46e5]" />, badge: 'Live', badgeCls: 'bg-[#e0e7ff] text-[#4338ca]' },
+    { id: 'anomalies', label: 'Payroll Anomalies', icon: <AlertTriangle size={15} className="text-[#dc2626]" />, badge: '2 Alerts', badgeCls: 'bg-[#fee2e2] text-[#dc2626]' },
+    { id: 'salary-master', label: 'Company Salary Master', icon: <Award size={15} className="text-[#d97706]" />, badge: 'FY27', badgeCls: 'bg-[#fef3c7] text-[#b45309]' },
+    { id: 'shifts', label: 'Shift Allocation', icon: <Clock3 size={15} className="text-[#0284c7]" />, badge: '3 Shifts', badgeCls: 'bg-[#e0f2fe] text-[#0369a1]' },
+    { id: 'policies', label: 'HR Policies', icon: <FileText size={15} className="text-[#64748b]" />, badge: 'Handbook', badgeCls: 'bg-[#f1f5f9] text-[#475569]' },
+    { id: 'onboarding', label: 'Recruitment & Onboarding', icon: <Building2 size={15} className="text-[#16a34a]" />, badge: '+ Add', badgeCls: 'bg-[#dcfce7] text-[#16a34a]' },
+    { id: 'broadcast', label: 'Broadcast Announcements', icon: <Megaphone size={15} className="text-[#9333ea]" />, badge: 'Send', badgeCls: 'bg-[#f3e8ff] text-[#7e22ce]' },
   ];
 
-  // Dedicated navigation for Employees (Self-Service)
   const employeeNavItems = [
     { to: '/dashboard', label: 'My Dashboard', icon: <Building2 size={15} /> },
     { to: '/profile', label: 'My Profile & Records', icon: <UserRound size={15} /> },
@@ -88,12 +94,12 @@ export function Shell() {
   ];
 
   const employeeExtraItems = [
-    { label: 'Holiday Calendar', icon: <Calendar size={15} /> },
-    { label: 'Shift Schedule', icon: <Clock3 size={15} /> },
-    { label: 'Training & Development', icon: <BookOpen size={15} /> },
-    { label: 'IT & HR Helpdesk', icon: <HelpCircle size={15} /> },
-    { label: 'Company Announcements', icon: <Megaphone size={15} /> },
-    { label: 'My Assigned Projects', icon: <FolderGit2 size={15} /> },
+    { id: 'holidays', label: 'Holiday Calendar', icon: <Calendar size={15} className="text-[#16a34a]" />, badge: '2026-27', badgeCls: 'bg-[#f0fdf4] text-[#16a34a]' },
+    { id: 'shifts', label: 'Shift Schedule', icon: <Clock3 size={15} className="text-[#0284c7]" />, badge: '9AM-6PM', badgeCls: 'bg-[#e0f2fe] text-[#0369a1]' },
+    { id: 'training', label: 'Training & Development', icon: <BookOpen size={15} className="text-[#d97706]" />, badge: '1 Active', badgeCls: 'bg-[#fef3c7] text-[#b45309]' },
+    { id: 'helpdesk', label: 'IT & HR Helpdesk', icon: <HelpCircle size={15} className="text-[#4f46e5]" />, badge: 'Support', badgeCls: 'bg-[#e0e7ff] text-[#4338ca]' },
+    { id: 'broadcast', label: 'Company Announcements', icon: <Megaphone size={15} className="text-[#dc2626]" />, badge: 'New', badgeCls: 'bg-[#fee2e2] text-[#dc2626]' },
+    { id: 'projects', label: 'My Assigned Projects', icon: <FolderGit2 size={15} className="text-[#0284c7]" />, badge: '2 Tasks', badgeCls: 'bg-[#f1f5f9] text-[#475569]' },
   ];
 
   const currentNavItems = isAdmin ? adminNavItems : employeeNavItems;
@@ -101,8 +107,7 @@ export function Shell() {
 
   return (
     <div className="flex min-h-screen bg-[#f1f5f9]">
-      <aside className="portal-sidebar hidden md:flex w-[240px] flex-col border-r border-[#e2e8f0] bg-white">
-        {/* Brand Header */}
+      <aside className="portal-sidebar hidden md:flex w-[240px] flex-col border-r border-[#e2e8f0] bg-white flex-shrink-0">
         <div className="flex items-center gap-2.5 p-3.5 border-b border-[#e2e8f0]">
           <div className={`flex h-9 w-9 items-center justify-center rounded-md font-bold text-white shadow-sm flex-shrink-0 ${isAdmin ? 'bg-[#4f46e5]' : 'bg-[#0284c7]'}`}>
             {logo ? <img src={logo} alt="" className="h-7 w-7 object-contain" /> : <Building2 size={20} />}
@@ -117,12 +122,11 @@ export function Shell() {
           </div>
         </div>
 
-        {/* Search */}
         <div className="px-3 py-2.5 bg-white border-b border-[#f1f5f9]">
           <div className="relative flex items-center">
             <input
               type="text"
-              placeholder={isAdmin ? "Search employees, logs..." : "Search services, policies..."}
+              placeholder={isAdmin ? "Search employees, tools..." : "Search services, policies..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded border border-[#cbd5e1] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0284c7] focus:bg-white focus:outline-none"
@@ -131,15 +135,13 @@ export function Shell() {
           </div>
         </div>
 
-        {/* Section Title */}
         <div className="px-3 pt-3 pb-1">
           <div className={`w-full rounded border py-1.5 px-3 text-left text-[12px] font-semibold flex items-center gap-2 ${isAdmin ? 'bg-[#eef2ff] border-[#c7d2fe] text-[#4338ca]' : 'bg-[#f0f9ff] border-[#bae6fd] text-[#0369a1]'}`}>
             <BookOpen size={13} /> {isAdmin ? 'HR Administration' : 'Employee Workspace'}
           </div>
         </div>
 
-        {/* Primary Links */}
-        <nav className="flex-1 overflow-y-auto py-1 px-1.5">
+        <nav className="flex-1 overflow-y-auto py-1 px-1.5 space-y-0.5">
           {currentNavItems.map((it) => (
             <NavLink
               key={it.to}
@@ -155,21 +157,32 @@ export function Shell() {
               }
             >
               {it.icon}
-              {it.label}
+              <span>{it.label}</span>
             </NavLink>
           ))}
 
-          <div className="my-2 border-t border-[#f1f5f9]" />
+          <div className="my-2 border-t border-[#f1f5f9] px-2 pt-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#94a3b8]">
+              {isAdmin ? 'Management Tools' : 'Self-Service Tools'}
+            </span>
+          </div>
 
-          {currentExtraItems.map((it, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-2.5 px-3 py-2 rounded text-[12.5px] font-medium text-[#475569] hover:bg-[#f1f5f9] opacity-75 hover:opacity-100 cursor-pointer"
-              onClick={() => navigate(isAdmin ? '/employees' : '/dashboard')}
+          {currentExtraItems.map((it) => (
+            <button
+              key={it.id}
+              onClick={() => setActiveModal(it.id)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded text-[12px] font-medium text-[#334155] hover:bg-[#f1f5f9] hover:text-[#0f172a] transition duration-150 cursor-pointer text-left group"
             >
-              {it.icon}
-              {it.label}
-            </div>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {it.icon}
+                <span className="truncate group-hover:font-semibold">{it.label}</span>
+              </div>
+              {it.badge && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${it.badgeCls}`}>
+                  {it.badge}
+                </span>
+              )}
+            </button>
           ))}
         </nav>
       </aside>
@@ -296,6 +309,19 @@ export function Shell() {
       </aside>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+
+      {/* Interactive Enterprise Modals */}
+      {activeModal === 'audit' && <AuditLogsModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'anomalies' && <PayrollAnomaliesModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'salary-master' && <SalaryMasterModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'shifts' && <ShiftAllocationModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'policies' && <HRPoliciesModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'onboarding' && <AddEmployeeModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'broadcast' && <BroadcastModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'holidays' && <HolidayCalendarModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'helpdesk' && <HelpdeskModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'training' && <TrainingModal onClose={() => setActiveModal(null)} />}
+      {activeModal === 'projects' && <ProjectsModal onClose={() => setActiveModal(null)} />}
     </div>
   );
 }
