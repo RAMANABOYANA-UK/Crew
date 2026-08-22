@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 // GET /api/payroll/all — Admin/HR gets all payroll records
 export async function GET() {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
 
     const payrolls = await prisma.payroll.findMany({
       include: {
@@ -39,7 +39,9 @@ export async function GET() {
       },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("All payroll fetch error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

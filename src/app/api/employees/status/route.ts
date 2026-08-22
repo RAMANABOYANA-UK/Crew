@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 // GET /api/employees/status — Admin/HR gets status dots for all employees
 export async function GET() {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
 
     const now = new Date();
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -20,7 +20,7 @@ export async function GET() {
         lastName: true,
         department: true,
         designation: true,
-        profilePic: true,
+        profilePicture: true,
       },
     });
 
@@ -81,7 +81,7 @@ export async function GET() {
         lastName: emp.lastName,
         department: emp.department,
         designation: emp.designation,
-        profilePicture: emp.profilePic,
+        profilePicture: emp.profilePicture,
         statusDot,
         statusEmoji,
         statusLabel,
@@ -97,7 +97,9 @@ export async function GET() {
 
     return NextResponse.json({ employees: statuses, summary });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Employee status error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

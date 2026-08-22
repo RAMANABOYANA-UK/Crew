@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { updateWageSchema } from "@/lib/validations/payroll";
 import { computeSalaryBreakdown } from "@/lib/salary";
 import type { SalaryConfigInput } from "@/lib/salary";
@@ -11,7 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
     const { id } = await params;
 
     const body = await request.json();
@@ -108,7 +108,9 @@ export async function PATCH(
       breakdown,
     });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Payroll update error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -120,7 +122,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
     const { id } = await params;
 
     const payroll = await prisma.payroll.findUnique({
@@ -147,7 +149,9 @@ export async function GET(
 
     return NextResponse.json({ payroll });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Payroll get error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

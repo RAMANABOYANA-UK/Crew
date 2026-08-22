@@ -1,7 +1,8 @@
 /**
  * Seed Data Script for Dayflow HRMS
  * 
- * Uses P2's User→Employee model structure with P3's Attendance/Leave/Payroll data.
+ * Creates Employees (Clerk-linked via clerkUserId, with credential User accounts
+ * for the first-login password workflow) plus P3 Attendance/Leave/Payroll data.
  */
 
 import "dotenv/config";
@@ -60,7 +61,7 @@ async function main() {
   });
   console.log("⚙️  Created SalaryConfig.\n");
 
-  // 2. Create Users + Employees (P2's model: User → Employee)
+  // 2. Create Employees (with linked credential User accounts)
   const createdEmployees: Array<{ id: string; wage: number; firstName: string; lastName: string }> = [];
 
   for (let i = 0; i < employees.length; i++) {
@@ -77,7 +78,7 @@ async function main() {
         loginId,
         email: emp.email,
         passwordHash,
-        role: emp.role === "HR" ? "ADMIN" : emp.role,
+        role: emp.role,
         mustChangePassword,
         isFirstLogin: mustChangePassword,
       },
@@ -85,6 +86,7 @@ async function main() {
 
     const employee = await prisma.employee.create({
       data: {
+        clerkUserId: `clerk_seed_${employeeId.toLowerCase()}`,
         userId: user.id,
         loginId,
         employeeId,
@@ -94,7 +96,8 @@ async function main() {
         phone: emp.phone,
         department: emp.department,
         designation: emp.designation,
-        joinDate: emp.joinDate,
+        dateOfJoining: emp.joinDate,
+        role: emp.role,
       },
     });
 

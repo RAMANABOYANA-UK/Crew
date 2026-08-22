@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { leaveReviewSchema } from "@/lib/validations/leave";
 
 // PATCH /api/leave/[id]/review — Admin/HR approves or rejects a leave request
@@ -9,7 +9,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const admin = await requireRole(["ADMIN", "HR"]);
+    const admin = await requireAdmin();
     const { id } = await params;
 
     const body = await request.json();
@@ -52,7 +52,7 @@ export async function PATCH(
       data: {
         status,
         adminComment: adminComment || null,
-        reviewedBy: admin.clerkId,
+        reviewedBy: admin.clerkUserId,
         reviewedAt: new Date(),
       },
       include: {
@@ -137,7 +137,9 @@ export async function PATCH(
       leaveRequest: updated,
     });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Leave review error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

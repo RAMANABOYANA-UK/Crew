@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 // GET /api/attendance/today — Admin/HR gets today's attendance status for all employees
 export async function GET() {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
 
     const now = new Date();
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -84,7 +84,9 @@ export async function GET() {
 
     return NextResponse.json({ statuses, summary });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Today attendance error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

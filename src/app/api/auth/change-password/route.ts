@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, comparePassword, hashPassword, generateToken } from "@/lib/auth";
+import { getCurrentUser, comparePassword, hashPassword, generateToken } from "@/lib/auth";
 import { changePasswordSchema } from "@/lib/validations/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const currentUser = await requireAuth();
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized. Please sign in." },
+        { status: 401 }
+      );
+    }
 
     const body = await req.json();
     const parsed = changePasswordSchema.safeParse(body);

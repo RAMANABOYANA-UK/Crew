@@ -17,7 +17,6 @@ export async function GET(req: NextRequest) {
     const employees = await prisma.employee.findMany({
       where: {
         AND: [
-          department ? { department } : {},
           search
             ? {
                 OR: [
@@ -29,27 +28,20 @@ export async function GET(req: NextRequest) {
                 ],
               }
             : {},
+          department ? { department } : {},
         ],
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            role: true,
-            loginId: true,
-            mustChangePassword: true,
-            isFirstLogin: true,
-          },
-        },
-        payroll: true,
       },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ success: true, data: employees });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 }
+      );
+    }
     return NextResponse.json(
       { success: false, message: "Forbidden or unauthorized" },
       { status: 403 }
@@ -154,7 +146,8 @@ export async function POST(req: NextRequest) {
         address: address || null,
         department: department || null,
         designation: designation || null,
-        joinDate,
+        dateOfJoining: joinDate,
+        role,
       },
     });
 
@@ -206,7 +199,12 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json(
+        { success: false, error: "Forbidden. Admin or HR privileges required." },
+        { status: 403 }
+      );
+    }
     console.error("Employee onboarding error:", error);
     return NextResponse.json(
       { success: false, error: "Internal server error during onboarding" },

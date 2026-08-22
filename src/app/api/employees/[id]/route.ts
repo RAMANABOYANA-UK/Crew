@@ -12,15 +12,6 @@ export async function GET(
 
     const employee = await prisma.employee.findUnique({
       where: { id },
-      include: {
-        user: {
-          select: {
-            email: true,
-            role: true,
-          },
-        },
-        payroll: true,
-      },
     });
 
     if (!employee) {

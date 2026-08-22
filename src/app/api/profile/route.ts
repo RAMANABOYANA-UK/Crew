@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
 
 const updateSchema = z.object({
   phone: z.string().optional(),
   address: z.string().optional(),
-  profile_picture: z.string().url().optional().or(z.literal("")),
-  first_name: z.string().optional(),
-  last_name: z.string().optional(),
+  profilePicture: z.string().url().optional().or(z.literal("")),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
   department: z.string().optional(),
   designation: z.string().optional(),
-  basic_salary: z.number().optional(),
-  hra: z.number().optional(),
-  allowances: z.number().optional(),
 });
 
 export async function GET() {
@@ -41,26 +38,16 @@ export async function PATCH(req: NextRequest) {
       : {
           phone: data.phone,
           address: data.address,
-          profile_picture: data.profile_picture || undefined,
+          profilePicture: data.profilePicture || undefined,
         };
 
-    const { data: updated, error } = await supabase
-      .from("employees")
-      .update(allowedData)
-      .eq("id", employee.id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error(error);
-      return NextResponse.json(
-        { success: false, message: "Update failed" },
-        { status: 500 }
-      );
-    }
+    const updated = await prisma.employee.update({
+      where: { id: employee.id },
+      data: allowedData,
+    });
 
     return NextResponse.json({ success: true, data: updated });
-  } catch (error: unknown) {
+  } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { success: false, message: error.issues },

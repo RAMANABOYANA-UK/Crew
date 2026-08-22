@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { updateSalaryConfigSchema } from "@/lib/validations/payroll";
 
 // GET /api/payroll/config — Admin/HR gets current salary configuration
 export async function GET() {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
 
     const config = await prisma.salaryConfig.findFirst();
 
@@ -27,7 +27,9 @@ export async function GET() {
 
     return NextResponse.json({ config, isDefault: false });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Config fetch error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
@@ -36,7 +38,7 @@ export async function GET() {
 // PATCH /api/payroll/config — Admin/HR updates salary configuration
 export async function PATCH(request: NextRequest) {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
 
     const body = await request.json();
     const parsed = updateSalaryConfigSchema.safeParse(body);
@@ -75,7 +77,9 @@ export async function PATCH(request: NextRequest) {
       config,
     });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("Config update error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

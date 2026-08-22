@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 // GET /api/leave/all — Admin/HR gets all leave requests
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(["ADMIN", "HR"]);
+    await requireAdmin();
 
     const searchParams = request.nextUrl.searchParams;
     const statusFilter = searchParams.get("status");
@@ -45,7 +45,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ leaveRequests, summary });
   } catch (error) {
-    if (error instanceof Response) return error;
+    if (error instanceof Error && error.message === "Forbidden") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     console.error("All leaves fetch error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
