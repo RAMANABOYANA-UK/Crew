@@ -117,7 +117,7 @@ export async function requireAuth() {
     throw new Error("Unauthorized");
   }
 
-  const effectiveUser = user || (employee as { user?: typeof user })?.user;
+  const effectiveUser = user || (employee ? (employee as unknown as { user: typeof user }).user : null);
   return {
     ...(effectiveUser || {}),
     id: effectiveUser?.id || employee?.userId || employee?.id || "",
