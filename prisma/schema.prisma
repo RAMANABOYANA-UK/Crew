@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -40,6 +40,12 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum CorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum NotificationType {
   LEAVE_SUBMITTED
   LEAVE_APPROVED
@@ -51,10 +57,9 @@ enum NotificationType {
 
 model User {
   id                 String         @id @default(cuid())
-  clerkId            String?        @unique
   loginId            String?        @unique
   email              String         @unique
-  passwordHash       String?
+  passwordHash       String
   role               Role           @default(EMPLOYEE)
   mustChangePassword Boolean        @default(true)
   isFirstLogin       Boolean        @default(true)
@@ -65,13 +70,12 @@ model User {
 }
 
 model Employee {
-  id                 String         @id @default(cuid())
-  clerkUserId        String?        @unique
-  userId             String?        @unique
-  user               User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String                 @id @default(cuid())
+  userId             String?                @unique
+  user               User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  loginId            String?        @unique
-  employeeId         String?        @unique
+  loginId            String?                @unique
+  employeeId         String?                @unique
   firstName          String
   lastName           String
   email              String?
@@ -82,46 +86,82 @@ model Employee {
   joinDate           DateTime?
   profilePic         String?
   profilePicture     String?
-  role               Role           @default(EMPLOYEE)
-  address            String?
-  status             EmployeeStatus @default(ACTIVE)
+  role               Role                   @default(EMPLOYEE)
+  status             EmployeeStatus         @default(ACTIVE)
 
-  paidLeaveBalance   Int            @default(12)
-  sickLeaveBalance   Int            @default(6)
-  unpaidLeaveBalance Int            @default(0)
+  paidLeaveBalance   Int                    @default(12)
+  sickLeaveBalance   Int                    @default(6)
+  unpaidLeaveBalance Int                    @default(0)
 
-  basicSalary        Decimal        @default(0) @db.Decimal(10, 2)
-  hra                Decimal        @default(0) @db.Decimal(10, 2)
-  allowances         Decimal        @default(0) @db.Decimal(10, 2)
+  basicSalary        Float                  @default(0)
+  hra                Float                  @default(0)
+  allowances         Float                  @default(0)
 
-  createdAt          DateTime       @default(now())
-  updatedAt          DateTime       @updatedAt
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
-  // P3 Relations
+  // Relations
   attendances        Attendance[]
   leaveRequests      LeaveRequest[]
+  corrections        AttendanceCorrection[]
+  jobHistory         EmployeeJobHistory[]
   payroll            Payroll?
-  payrollAnomalies   PayrollAnomaly[]
 }
 
-// ─── P3 Models (Attendance / Leave / Payroll) ───────────
+// ─── P3 Models (Attendance / Leave / Payroll / Corrections / Audit) ───────────
 
 model Attendance {
-  id          String           @id @default(cuid())
+  id          String                 @id @default(cuid())
   employeeId  String
-  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  date        DateTime         @db.Date
+  employee    Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date        DateTime               @db.Date
   checkIn     DateTime?
   checkOut    DateTime?
   status      AttendanceStatus
   hoursWorked Float?
   notes       String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  corrections AttendanceCorrection[]
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
 
   @@unique([employeeId, date])
   @@index([employeeId])
   @@index([date])
+}
+
+model AttendanceCorrection {
+  id                String           @id @default(cuid())
+  attendanceId      String?
+  attendance        Attendance?      @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  employeeId        String
+  employee          Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date              DateTime         @db.Date
+  requestedCheckIn  DateTime?
+  requestedCheckOut DateTime?
+  reason            String
+  status            CorrectionStatus @default(PENDING)
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  adminComment      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+model EmployeeJobHistory {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  field      String   // "department" | "designation" | "status" | "role"
+  oldValue   String?
+  newValue   String?
+  reason     String
+  changedBy  String   // userId of admin
+  createdAt  DateTime @default(now())
+
+  @@index([employeeId])
 }
 
 model LeaveRequest {
@@ -148,17 +188,17 @@ model Payroll {
   id                String   @id @default(cuid())
   employeeId        String   @unique
   employee          Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  wage              Decimal  @db.Decimal(10, 2)
-  basicSalary       Decimal  @db.Decimal(10, 2)
-  hra               Decimal  @db.Decimal(10, 2)
-  standardAllowance Decimal  @db.Decimal(10, 2)
-  performanceBonus  Decimal  @db.Decimal(10, 2)
-  lta               Decimal  @db.Decimal(10, 2)
-  fixedAllowance    Decimal  @db.Decimal(10, 2)
-  pfEmployee        Decimal  @db.Decimal(10, 2)
-  pfEmployer        Decimal  @db.Decimal(10, 2)
-  professionalTax   Decimal  @db.Decimal(10, 2)
-  netPayable        Decimal  @db.Decimal(10, 2)
+  wage              Float
+  basicSalary       Float
+  hra               Float
+  standardAllowance Float
+  performanceBonus  Float
+  lta               Float
+  fixedAllowance    Float
+  pfEmployee        Float
+  pfEmployer        Float
+  professionalTax   Float
+  netPayable        Float
   payableDays       Int      @default(0)
   totalWorkingDays  Int      @default(22)
   createdAt         DateTime @default(now())
@@ -167,12 +207,12 @@ model Payroll {
 
 model SalaryConfig {
   id                   String   @id @default(cuid())
-  pfEmployeeRate       Decimal  @default(0.12) @db.Decimal(5, 4)
-  pfEmployerRate       Decimal  @default(0.12) @db.Decimal(5, 4)
-  professionalTax      Decimal  @default(200) @db.Decimal(10, 2)
-  standardAllowance    Decimal  @default(4167) @db.Decimal(10, 2)
-  performanceBonusRate Decimal  @default(0.0833) @db.Decimal(5, 4)
-  ltaRate              Decimal  @default(0.0833) @db.Decimal(5, 4)
+  pfEmployeeRate       Float    @default(0.12)
+  pfEmployerRate       Float    @default(0.12)
+  professionalTax      Float    @default(200)
+  standardAllowance    Float    @default(4167)
+  performanceBonusRate Float    @default(0.0833)
+  ltaRate              Float    @default(0.0833)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -191,51 +231,4 @@ model Notification {
 
   @@index([userId])
   @@index([isRead])
-}
-
-// ─── Enterprise HRMS Models (Audit & Anomalies) ─────────
-
-model AuditLog {
-  id         String   @id @default(cuid())
-  actorId    String?
-  actorEmail String?
-  action     String
-  entityType String
-  entityId   String?
-  oldValues  Json?
-  newValues  Json?
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
-
-  @@index([actorId])
-  @@index([entityType, entityId])
-  @@index([action])
-  @@index([createdAt])
-}
-
-enum AnomalySeverity {
-  LOW
-  MEDIUM
-  HIGH
-  CRITICAL
-}
-
-model PayrollAnomaly {
-  id          String          @id @default(cuid())
-  employeeId  String
-  employee    Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  payrollId   String?
-  ruleCode    String
-  severity    AnomalySeverity @default(MEDIUM)
-  title       String
-  description String
-  details     Json?
-  isResolved  Boolean         @default(false)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  @@index([employeeId])
-  @@index([ruleCode])
-  @@index([isResolved])
 }

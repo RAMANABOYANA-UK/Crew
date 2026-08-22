@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentEmployee } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { leaveRequestSchema } from "@/lib/validations/leave";
+import { applyLeaveApproval } from "@/lib/leave-approver";
+import { scopeToSelf } from "@/lib/scope";
 
-// POST /api/leave — Employee applies for leave
+// POST /api/leave — Employee applies for leave (with Smart Auto-Approval for 1-day low-risk requests)
 // GET  /api/leave — Employee gets their own leave requests
 export async function POST(request: NextRequest) {
   try {
-    const employee = await getCurrentEmployee();
+    const session = await requireAuth();
+    const employee = session.employee;
+
     if (!employee) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
+        { success: false, message: "Employee profile not found" },
+        { status: 404 }
       );
     }
 
@@ -39,29 +43,23 @@ export async function POST(request: NextRequest) {
     const totalDays =
       Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    // Check remaining leave balance
+    let availableBalance = 0;
     if (leaveType === "PAID" || leaveType === "CASUAL") {
-      const currentBalance = employee.paidLeaveBalance ?? 12;
-      if (totalDays > currentBalance) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `Insufficient paid/casual leave balance. Requested ${totalDays} day(s), available ${currentBalance} day(s).`,
-          },
-          { status: 400 }
-        );
-      }
+      availableBalance = employee.paidLeaveBalance ?? 12;
     } else if (leaveType === "SICK") {
-      const currentBalance = employee.sickLeaveBalance ?? 6;
-      if (totalDays > currentBalance) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `Insufficient sick leave balance. Requested ${totalDays} day(s), available ${currentBalance} day(s).`,
-          },
-          { status: 400 }
-        );
-      }
+      availableBalance = employee.sickLeaveBalance ?? 6;
+    } else {
+      availableBalance = 999; // Unpaid leave
+    }
+
+    if (totalDays > availableBalance) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Insufficient leave balance. Requested ${totalDays} day(s), available ${availableBalance} day(s).`,
+        },
+        { status: 400 }
+      );
     }
 
     // Check for overlapping leave requests (not rejected)
@@ -89,7 +87,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const leaveRequest = await prisma.leaveRequest.create({
+    // Smart Auto-Approval Rule: 1-day low-risk requests with sufficient balance are auto-approved
+    const autoApprove = totalDays <= 1 && availableBalance >= totalDays && leaveType !== "UNPAID";
+
+    let leaveRequest = await prisma.leaveRequest.create({
       data: {
         employeeId: employee.id,
         leaveType,
@@ -97,30 +98,38 @@ export async function POST(request: NextRequest) {
         endDate: end,
         totalDays,
         reason,
-        status: "PENDING",
+        status: autoApprove ? "APPROVED" : "PENDING",
+        reviewedBy: autoApprove ? "SYSTEM" : null,
+        reviewedAt: autoApprove ? new Date() : null,
       },
     });
 
-    // Notify all Admins and HRs about the new leave submission
-    try {
-      const { notifyAdmins } = await import("@/lib/notifications");
-      await notifyAdmins({
-        title: "New Leave Request Submitted",
-        message: `${employee.firstName} ${employee.lastName} has submitted a ${leaveType} leave request for ${totalDays} day(s).`,
-        type: "LEAVE_SUBMITTED",
-        link: `/dashboard/leave`,
-        emailSubject: `[Dayflow HRMS] New Leave Request: ${employee.firstName} ${employee.lastName}`,
-        emailText: `Hello Admin/HR,\n\n${employee.firstName} ${employee.lastName} has applied for ${leaveType} leave from ${start.toISOString().split("T")[0]} to ${end.toISOString().split("T")[0]} (${totalDays} day(s)).\n\nReason: ${reason}\n\nPlease review it in the Dayflow HRMS portal.`,
-      });
-    } catch (notifyErr) {
-      console.error("Failed to dispatch leave notification to admins:", notifyErr);
+    if (autoApprove) {
+      leaveRequest = (await applyLeaveApproval(leaveRequest.id, "SYSTEM")) as typeof leaveRequest;
+    } else {
+      // Notify all Admins and HRs about the new pending leave submission
+      try {
+        const { notifyAdmins } = await import("@/lib/notifications");
+        await notifyAdmins({
+          title: "New Leave Request Submitted",
+          message: `${employee.firstName} ${employee.lastName} has submitted a ${leaveType} leave request for ${totalDays} day(s).`,
+          type: "LEAVE_SUBMITTED",
+          link: "/dashboard/leave",
+          emailSubject: `[Dayflow HRMS] New Leave Request: ${employee.firstName} ${employee.lastName}`,
+          emailText: `Hello Admin/HR,\n\n${employee.firstName} ${employee.lastName} has applied for ${leaveType} leave from ${start.toISOString().split("T")[0]} to ${end.toISOString().split("T")[0]} (${totalDays} day(s)).\n\nReason: ${reason}\n\nPlease review it in the Dayflow HRMS portal.`,
+        });
+      } catch (notifyErr) {
+        console.error("Failed to dispatch leave notification to admins:", notifyErr);
+      }
     }
 
     return NextResponse.json(
       {
         success: true,
         data: leaveRequest,
-        message: "Leave request submitted.",
+        message: autoApprove
+          ? "Leave request auto-approved by system."
+          : "Leave request submitted for review.",
       },
       { status: 201 }
     );
@@ -135,19 +144,23 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const employee = await getCurrentEmployee();
-    if (!employee) {
+    const session = await requireAuth();
+
+    const searchParams = request.nextUrl.searchParams;
+    const requestedEmployeeId = searchParams.get("employeeId");
+    const targetEmployeeId = scopeToSelf(session, requestedEmployeeId);
+
+    if (!targetEmployeeId) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
+        { success: false, message: "Employee profile not found" },
+        { status: 404 }
       );
     }
 
-    const searchParams = request.nextUrl.searchParams;
     const statusFilter = searchParams.get("status");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = { employeeId: employee.id };
+    const where: any = { employeeId: targetEmployeeId };
     if (statusFilter) {
       where.status = statusFilter;
     }
@@ -162,8 +175,6 @@ export async function GET(request: NextRequest) {
       pending: leaveRequests.filter((l) => l.status === "PENDING").length,
       approved: leaveRequests.filter((l) => l.status === "APPROVED").length,
       rejected: leaveRequests.filter((l) => l.status === "REJECTED").length,
-      paidBalance: employee.paidLeaveBalance ?? 12,
-      sickBalance: employee.sickLeaveBalance ?? 6,
     };
 
     return NextResponse.json({

@@ -1,8 +1,8 @@
 /**
  * Seed Data Script for Dayflow HRMS
  * 
- * Creates Employees (Clerk-linked via clerkUserId, with credential User accounts
- * for the first-login password workflow) plus P3 Attendance/Leave/Payroll data.
+ * Creates Employees (credential User accounts for pure JWT auth)
+ * plus P3 Attendance, Leave, AttendanceCorrections, JobHistory, and Payroll data.
  */
 
 import "dotenv/config";
@@ -47,6 +47,8 @@ async function main() {
   console.log("🌱 Starting seed...\n");
 
   // Clean existing data (order matters for FK constraints)
+  await prisma.attendanceCorrection.deleteMany();
+  await prisma.employeeJobHistory.deleteMany();
   await prisma.attendance.deleteMany();
   await prisma.leaveRequest.deleteMany();
   await prisma.payroll.deleteMany();
@@ -61,7 +63,7 @@ async function main() {
   });
   console.log("⚙️  Created SalaryConfig.\n");
 
-  // 2. Create Employees (with linked credential User accounts)
+  // 2. Create Employees (with credential User accounts)
   const createdEmployees: Array<{ id: string; userId: string; wage: number; firstName: string; lastName: string }> = [];
 
   for (let i = 0; i < employees.length; i++) {
@@ -74,7 +76,6 @@ async function main() {
 
     const user = await prisma.user.create({
       data: {
-        clerkId: `clerk_seed_${employeeId.toLowerCase()}`,
         loginId,
         email: emp.email,
         passwordHash,
@@ -86,7 +87,6 @@ async function main() {
 
     const employee = await prisma.employee.create({
       data: {
-        clerkUserId: `clerk_seed_${employeeId.toLowerCase()}`,
         userId: user.id,
         loginId,
         employeeId,
@@ -99,6 +99,21 @@ async function main() {
         dateOfJoining: emp.joinDate,
         joinDate: emp.joinDate,
         role: emp.role,
+        paidLeaveBalance: 12,
+        sickLeaveBalance: 6,
+        unpaidLeaveBalance: 0,
+      },
+    });
+
+    // Create initial JobHistory entry
+    await prisma.employeeJobHistory.create({
+      data: {
+        employeeId: employee.id,
+        field: "status",
+        oldValue: null,
+        newValue: "ACTIVE",
+        reason: "Initial onboarding seed",
+        changedBy: user.id,
       },
     });
 
@@ -187,7 +202,20 @@ async function main() {
   }
   console.log("");
 
-  // 5. Create Payroll Records
+  // 5. Create Sample Attendance Corrections
+  const sampleCorrection = await prisma.attendanceCorrection.create({
+    data: {
+      employeeId: createdEmployees[2].id,
+      date: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2)),
+      requestedCheckIn: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2, 9, 0)),
+      requestedCheckOut: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 2, 17, 30)),
+      reason: "Forgot to check out at end of day due to client emergency meeting.",
+      status: "PENDING",
+    },
+  });
+  console.log(`⏱️  Created sample attendance correction request for ${createdEmployees[2].firstName} ${createdEmployees[2].lastName}.\n`);
+
+  // 6. Create Payroll Records
   for (const emp of createdEmployees) {
     const breakdown = computeSalaryBreakdown(emp.wage, DEFAULT_SALARY_CONFIG);
     const monthAttendance = attendanceData.filter(a => a.employeeId === emp.id && a.date.getMonth() === today.getMonth());
@@ -211,7 +239,7 @@ async function main() {
     console.log(`💰 Payroll for ${emp.firstName.padEnd(10)} — Wage: ₹${emp.wage.toLocaleString("en-IN").padStart(8)}, Net: ₹${breakdown.netPayable.toLocaleString("en-IN").padStart(8)}`);
   }
 
-  // 6. Create Sample Notifications
+  // 7. Create Sample Notifications
   const adminUser = createdEmployees[0];
   const hrUser = createdEmployees[1];
   const emp1 = createdEmployees[2]; // Amit Patel
