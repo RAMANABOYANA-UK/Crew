@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, requireRole } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { updateWageSchema } from "@/lib/validations/payroll";
-import { computeSalaryBreakdown, DEFAULT_SALARY_CONFIG } from "@/lib/salary";
+import { computeSalaryBreakdown } from "@/lib/salary";
 import type { SalaryConfigInput } from "@/lib/salary";
 
 // PATCH /api/payroll/[id] — Admin/HR updates wage and recomputes all salary components
@@ -11,7 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
     const { id } = await params;
 
     const body = await request.json();
@@ -33,7 +33,11 @@ export async function PATCH(
     // Find the payroll record
     const payroll = await prisma.payroll.findUnique({
       where: { id },
-      include: { employee: true },
+      include: {
+        employee: {
+          select: { firstName: true, lastName: true, employeeId: true },
+        },
+      },
     });
 
     if (!payroll) {
@@ -43,62 +47,69 @@ export async function PATCH(
       );
     }
 
-    // Fetch active salary config (or use defaults)
-    const activeConfig = await prisma.salaryConfig.findFirst({
-      orderBy: { createdAt: "desc" },
-    });
-
-    const config: SalaryConfigInput = activeConfig
+    // Get salary config
+    const config = await prisma.salaryConfig.findFirst();
+    const salaryConfig: SalaryConfigInput = config
       ? {
-          pfEmployeeRate: activeConfig.pfEmployeeRate,
-          pfEmployerRate: activeConfig.pfEmployerRate,
-          professionalTax: activeConfig.professionalTax,
-          standardAllowance: activeConfig.standardAllowance,
-          performanceBonusRate: activeConfig.performanceBonusRate,
-          ltaRate: activeConfig.ltaRate,
+          pfEmployeeRate: Number(config.pfEmployeeRate),
+          pfEmployerRate: Number(config.pfEmployerRate),
+          professionalTax: Number(config.professionalTax),
+          standardAllowance: Number(config.standardAllowance),
+          performanceBonusRate: Number(config.performanceBonusRate),
+          ltaRate: Number(config.ltaRate),
         }
-      : DEFAULT_SALARY_CONFIG;
+      : {
+          pfEmployeeRate: 0.12,
+          pfEmployerRate: 0.12,
+          professionalTax: 200,
+          standardAllowance: 4167,
+          performanceBonusRate: 0.0833,
+          ltaRate: 0.0833,
+        };
 
-    // Recompute salary breakdown with new wage
-    const breakdown = computeSalaryBreakdown(wage, config);
+    // Recompute salary breakdown
+    let breakdown;
+    try {
+      breakdown = computeSalaryBreakdown(wage, salaryConfig);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            error instanceof Error
+              ? error.message
+              : "Invalid wage for salary computation.",
+        },
+        { status: 400 }
+      );
+    }
 
-    // Update payroll record and employee basicSalary
-    const [updatedPayroll] = await prisma.$transaction([
-      prisma.payroll.update({
-        where: { id },
-        data: {
-          wage: breakdown.wage,
-          basicSalary: breakdown.basicSalary,
-          hra: breakdown.hra,
-          standardAllowance: breakdown.standardAllowance,
-          performanceBonus: breakdown.performanceBonus,
-          lta: breakdown.lta,
-          fixedAllowance: breakdown.fixedAllowance,
-          pfEmployee: breakdown.pfEmployee,
-          pfEmployer: breakdown.pfEmployer,
-          professionalTax: breakdown.professionalTax,
-          netPayable: breakdown.netPayable,
+    // Update payroll record
+    const updated = await prisma.payroll.update({
+      where: { id },
+      data: {
+        wage: breakdown.wage,
+        basicSalary: breakdown.basicSalary,
+        hra: breakdown.hra,
+        standardAllowance: breakdown.standardAllowance,
+        performanceBonus: breakdown.performanceBonus,
+        lta: breakdown.lta,
+        fixedAllowance: breakdown.fixedAllowance,
+        pfEmployee: breakdown.pfEmployee,
+        pfEmployer: breakdown.pfEmployer,
+        professionalTax: breakdown.professionalTax,
+        netPayable: breakdown.netPayable,
+      },
+      include: {
+        employee: {
+          select: { firstName: true, lastName: true, employeeId: true },
         },
-        include: {
-          employee: {
-            select: { firstName: true, lastName: true, employeeId: true },
-          },
-        },
-      }),
-      prisma.employee.update({
-        where: { id: payroll.employeeId },
-        data: {
-          basicSalary: breakdown.basicSalary,
-          hra: breakdown.hra,
-          allowances: breakdown.fixedAllowance,
-        },
-      }),
-    ]);
+      },
+    });
 
     // Record immutable audit entry
     try {
       const { logAuditEvent } = await import("@/lib/audit");
-      const admin = await requireRole(["ADMIN", "HR"]);
       await logAuditEvent({
         actorId: admin.id,
         actorEmail: admin.email,
@@ -114,8 +125,8 @@ export async function PATCH(
 
     return NextResponse.json({
       success: true,
-      data: updatedPayroll,
-      message: "Wage updated and salary recomputed successfully.",
+      data: { payroll: updated, breakdown },
+      message: `Wage updated for ${updated.employee.firstName} ${updated.employee.lastName}. All components recomputed.`,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
@@ -124,7 +135,7 @@ export async function PATCH(
         { status: 403 }
       );
     }
-    console.error("Wage update error:", error);
+    console.error("Payroll update error:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 }
@@ -132,9 +143,9 @@ export async function PATCH(
   }
 }
 
-// GET /api/payroll/[id] — Retrieve single payroll record
+// GET /api/payroll/[id] — Admin can view a specific payroll record
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -146,13 +157,11 @@ export async function GET(
       include: {
         employee: {
           select: {
-            id: true,
             firstName: true,
             lastName: true,
             employeeId: true,
             department: true,
             designation: true,
-            email: true,
           },
         },
       },
@@ -176,7 +185,7 @@ export async function GET(
         { status: 403 }
       );
     }
-    console.error("Payroll fetch error:", error);
+    console.error("Payroll get error:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
       { status: 500 }

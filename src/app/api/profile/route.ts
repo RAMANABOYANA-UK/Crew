@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -57,10 +57,10 @@ export async function PATCH(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: updated });
-  } catch (error: any) {
-    if (error.name === "ZodError") {
+  } catch (error: unknown) {
+    if (error instanceof ZodError) {
       return NextResponse.json(
-        { success: false, message: error.errors },
+        { success: false, message: error.issues },
         { status: 400 }
       );
     }

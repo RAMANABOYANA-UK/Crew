@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "./prisma";
-import { AnomalySeverity, Prisma } from "@/generated/prisma";
+import { AnomalySeverity, Prisma } from "../generated/prisma/client";
 
 export interface DetectedAnomaly {
   employeeId: string;
@@ -25,82 +25,91 @@ export interface DetectedAnomaly {
 export async function scanPayrollAnomalies(targetEmployeeId?: string): Promise<DetectedAnomaly[]> {
   const anomalies: DetectedAnomaly[] = [];
 
-  const payrolls = await prisma.payroll.findMany({
-    where: targetEmployeeId ? { employeeId: targetEmployeeId } : {},
+  const employees = await prisma.employee.findMany({
+    where: targetEmployeeId ? { id: targetEmployeeId } : {},
     include: {
-      employee: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          employeeId: true,
-          basicSalary: true,
+      payroll: true,
+      attendances: {
+        where: {
+          date: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          },
         },
       },
     },
   });
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  for (const emp of employees) {
+    if (!emp.payroll) continue;
 
-  for (const p of payrolls) {
-    const name = `${p.employee.firstName} ${p.employee.lastName}`;
+    const wage = Number(emp.payroll.wage);
+    const netPayable = Number(emp.payroll.netPayable);
+    const payableDays = emp.payroll.payableDays;
+    const totalWorkingDays = emp.payroll.totalWorkingDays;
+    const fullName = `${emp.firstName} ${emp.lastName}`;
 
-    // Rule 1: Below statutory minimum wage
-    if (p.wage < 10000) {
+    // ─── Rule 1: Below Minimum Wage ─────────────────────────
+    if (wage < 10000) {
       anomalies.push({
-        employeeId: p.employeeId,
-        employeeName: name,
-        payrollId: p.id,
+        employeeId: emp.id,
+        employeeName: fullName,
+        payrollId: emp.payroll.id,
         ruleCode: "BELOW_MIN_WAGE",
         severity: "HIGH",
-        title: "Wage Below Statutory Minimum",
-        description: `Configured CTC (₹${p.wage.toLocaleString()}) is below the statutory minimum wage threshold (₹10,000).`,
-        details: { wage: p.wage, threshold: 10000 },
+        title: `Wage Below Minimum Bound: ₹${wage}`,
+        description: `Employee ${fullName}'s wage of ₹${wage} is below the required statutory minimum of ₹10,000.`,
+        details: { wage, minimumAllowed: 10000 },
       });
     }
 
-    // Rule 2: Negative or zero net payable
-    if (p.netPayable <= 0) {
+    // ─── Rule 2: Negative or Zero Net Pay ───────────────────
+    if (netPayable <= 0) {
       anomalies.push({
-        employeeId: p.employeeId,
-        employeeName: name,
-        payrollId: p.id,
+        employeeId: emp.id,
+        employeeName: fullName,
+        payrollId: emp.payroll.id,
         ruleCode: "NEGATIVE_NET_PAY",
-        severity: "HIGH",
-        title: "Zero or Negative Net Payable",
-        description: `Calculated net payable amount (₹${p.netPayable.toLocaleString()}) is zero or negative due to excessive deductions.`,
-        details: { netPayable: p.netPayable, wage: p.wage, pfEmployee: p.pfEmployee, professionalTax: p.professionalTax },
+        severity: "CRITICAL",
+        title: `Non-positive Net Pay: ₹${netPayable}`,
+        description: `Employee ${fullName} has a computed net payable amount of ₹${netPayable}. Deductions exceed earnings.`,
+        details: {
+          wage,
+          netPayable,
+          pfEmployee: Number(emp.payroll.pfEmployee),
+          professionalTax: Number(emp.payroll.professionalTax),
+        },
       });
     }
 
-    // Rule 3: Attendance mismatch (payable days > 22 or > total working days)
-    if (p.payableDays > p.totalWorkingDays) {
+    // ─── Rule 3: Attendance vs Payable Days Mismatch ────────
+    if (payableDays > totalWorkingDays) {
       anomalies.push({
-        employeeId: p.employeeId,
-        employeeName: name,
-        payrollId: p.id,
+        employeeId: emp.id,
+        employeeName: fullName,
+        payrollId: emp.payroll.id,
         ruleCode: "ATTENDANCE_MISMATCH",
-        severity: "MEDIUM",
-        title: "Payable Days Exceed Working Days",
-        description: `Employee has ${p.payableDays} payable days configured, which exceeds total working days (${p.totalWorkingDays}) in current cycle.`,
-        details: { payableDays: p.payableDays, totalWorkingDays: p.totalWorkingDays },
+        severity: "HIGH",
+        title: `Payable Days Exceed Working Days (${payableDays}/${totalWorkingDays})`,
+        description: `Payable days (${payableDays}) exceeds total working days in period (${totalWorkingDays}).`,
+        details: { payableDays, totalWorkingDays },
       });
-    }
+    } else if (emp.attendances.length > 0) {
+      const presentCount = emp.attendances.filter(
+        (a) => a.status === "PRESENT" || a.status === "HALF_DAY" || a.status === "ON_LEAVE"
+      ).length;
 
-    // Rule 4: High salary leap compared to basic salary
-    if (p.employee.basicSalary > 0 && p.wage > p.employee.basicSalary * 3) {
-      anomalies.push({
-        employeeId: p.employeeId,
-        employeeName: name,
-        payrollId: p.id,
-        ruleCode: "HIGH_SALARY_LEAP",
-        severity: "MEDIUM",
-        title: "Unusual Wage Discrepancy",
-        description: `Gross wage (₹${p.wage.toLocaleString()}) is more than 3x the employee basic salary (₹${p.employee.basicSalary.toLocaleString()}).`,
-        details: { wage: p.wage, basicSalary: p.employee.basicSalary },
-      });
+      if (presentCount === 0 && payableDays >= 20) {
+        anomalies.push({
+          employeeId: emp.id,
+          employeeName: fullName,
+          payrollId: emp.payroll.id,
+          ruleCode: "ATTENDANCE_MISMATCH",
+          severity: "MEDIUM",
+          title: `Zero Attendance with Full Payable Days`,
+          description: `Employee ${fullName} has 0 present/leave records in the past 30 days but has full payable days (${payableDays}).`,
+          details: { presentCount, payableDays },
+        });
+      }
     }
   }
 

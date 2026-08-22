@@ -1,5 +1,13 @@
-import { prisma } from "./prisma";
+/**
+ * Immutable Audit Logger for Dayflow HRMS
+ * 
+ * Records system events with actor info, action, entity, before/after states,
+ * IP address, and user agent.
+ */
+
 import { headers } from "next/headers";
+import { prisma } from "./prisma";
+import { Prisma } from "../generated/prisma/client";
 
 export interface LogAuditOptions {
   actorId?: string | null;
@@ -7,10 +15,10 @@ export interface LogAuditOptions {
   action: string;
   entityType: string;
   entityId?: string | null;
-  oldValues?: any;
-  newValues?: any;
-  ipAddress?: string;
-  userAgent?: string;
+  oldValues?: Prisma.InputJsonValue;
+  newValues?: Prisma.InputJsonValue;
+  ipAddress?: string | null;
+  userAgent?: string | null;
 }
 
 export async function logAuditEvent(options: LogAuditOptions) {
@@ -37,23 +45,21 @@ export async function logAuditEvent(options: LogAuditOptions) {
 
     const log = await prisma.auditLog.create({
       data: {
-        userId: options.actorId || null,
+        actorId: options.actorId || null,
+        actorEmail: options.actorEmail || null,
         action: options.action,
-        entity: options.entityType,
+        entityType: options.entityType,
         entityId: options.entityId || null,
-        details: JSON.stringify({
-          actorEmail: options.actorEmail,
-          oldValues: options.oldValues,
-          newValues: options.newValues,
-        }),
+        oldValues: options.oldValues ? options.oldValues : undefined,
+        newValues: options.newValues ? options.newValues : undefined,
         ipAddress: ip || "127.0.0.1",
         userAgent: ua || null,
       },
     });
 
     return log;
-  } catch (err) {
-    console.error("Failed to write audit log event:", err);
+  } catch (error) {
+    console.error("Failed to write audit log entry:", error);
     return null;
   }
 }

@@ -1,24 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
-import { scopeToSelf } from "@/lib/scope";
+import { getCurrentEmployee } from "@/lib/auth";
 
-// GET /api/attendance — Employee gets their own attendance, Admin gets scoped/filtered
+// GET /api/attendance — Employee gets their own attendance records
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireAuth();
-
-    const searchParams = request.nextUrl.searchParams;
-    const requestedEmployeeId = searchParams.get("employeeId");
-    const targetEmployeeId = scopeToSelf(session, requestedEmployeeId);
-
-    if (!targetEmployeeId) {
+    const employee = await getCurrentEmployee();
+    if (!employee) {
       return NextResponse.json(
-        { success: false, message: "Employee profile not found" },
-        { status: 404 }
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
       );
     }
 
+    const searchParams = request.nextUrl.searchParams;
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
 
@@ -36,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     const attendances = await prisma.attendance.findMany({
       where: {
-        employeeId: targetEmployeeId,
+        employeeId: employee.id,
         date: {
           gte: startDate,
           lte: endDate,

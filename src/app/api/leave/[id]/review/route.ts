@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { leaveReviewSchema } from "@/lib/validations/leave";
-import { applyLeaveApproval } from "@/lib/leave-approver";
 
 // PATCH /api/leave/[id]/review — Admin/HR approves or rejects a leave request
 export async function PATCH(
@@ -53,50 +52,114 @@ export async function PATCH(
       );
     }
 
-    if (status === "APPROVED") {
-      const updated = await applyLeaveApproval(id, admin.id, adminComment);
-      return NextResponse.json({
-        success: true,
-        data: updated,
-        message: "Leave request approved.",
-      });
-    }
-
-    // Reject leave request
+    // Update the leave request
     const updated = await prisma.leaveRequest.update({
       where: { id },
       data: {
-        status: "REJECTED",
+        status,
         adminComment: adminComment || null,
-        reviewedBy: admin.id,
+        reviewedBy: admin.employee?.loginId || admin.id,
         reviewedAt: new Date(),
       },
-      include: { employee: true },
+      include: {
+        employee: {
+          select: {
+            userId: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            employeeId: true,
+          },
+        },
+      },
     });
 
-    // Notify employee of rejection
+    // Notify the employee about the review decision
     if (updated.employee.userId) {
       try {
         const { createNotification } = await import("@/lib/notifications");
         await createNotification({
           userId: updated.employee.userId,
           userEmail: updated.employee.email || undefined,
-          title: "Leave Request Rejected",
-          message: `Your ${leaveRequest.leaveType} leave request (${leaveRequest.totalDays} day(s)) has been rejected.${
-            adminComment ? ` Note: "${adminComment}"` : ""
-          }`,
-          type: "LEAVE_REJECTED",
-          link: "/dashboard/leave",
+          title: `Leave Request ${status}`,
+          message: `Your ${leaveRequest.leaveType} leave request (${leaveRequest.totalDays} day(s)) has been ${status.toLowerCase()}.${adminComment ? ` Reviewer note: "${adminComment}"` : ""}`,
+          type: status === "APPROVED" ? "LEAVE_APPROVED" : "LEAVE_REJECTED",
+          link: `/dashboard/leave`,
+          emailSubject: `[Dayflow HRMS] Leave Request ${status}: ${leaveRequest.leaveType}`,
+          emailText: `Hello ${updated.employee.firstName},\n\nYour ${leaveRequest.leaveType} leave request for ${leaveRequest.totalDays} day(s) has been ${status.toLowerCase()}.${adminComment ? `\n\nReviewer Comment: ${adminComment}` : ""}\n\nRegards,\nDayflow HR Team`,
         });
-      } catch (err) {
-        console.error("Failed to send rejection notification:", err);
+      } catch (notifyErr) {
+        console.error("Failed to dispatch leave review notification to employee:", notifyErr);
+      }
+    }
+
+    // Record immutable audit entry
+    try {
+      const { logAuditEvent } = await import("@/lib/audit");
+      await logAuditEvent({
+        actorId: admin.id,
+        actorEmail: admin.email,
+        action: `LEAVE_${status}`,
+        entityType: "LeaveRequest",
+        entityId: leaveRequest.id,
+        oldValues: { status: leaveRequest.status },
+        newValues: { status, adminComment },
+      });
+    } catch (auditErr) {
+      console.error("Failed to write audit log for leave review:", auditErr);
+    }
+
+    // If approved, create ON_LEAVE attendance records for each day in the leave period
+    if (status === "APPROVED") {
+      const start = new Date(leaveRequest.startDate);
+      const end = new Date(leaveRequest.endDate);
+
+      const attendanceRecords = [];
+      for (
+        let d = new Date(start);
+        d <= end;
+        d.setDate(d.getDate() + 1)
+      ) {
+        const currentDate = new Date(d);
+        currentDate.setHours(0, 0, 0, 0);
+        const dayOfWeek = currentDate.getDay();
+
+        // Skip weekends
+        if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+
+        attendanceRecords.push({
+          employeeId: leaveRequest.employeeId,
+          date: new Date(currentDate),
+          status: "ON_LEAVE" as const,
+          notes: `Approved ${leaveRequest.leaveType.toLowerCase()} leave`,
+        });
+      }
+
+      // Upsert attendance records (in case some already exist)
+      for (const record of attendanceRecords) {
+        await prisma.attendance.upsert({
+          where: {
+            employeeId_date: {
+              employeeId: record.employeeId,
+              date: record.date,
+            },
+          },
+          update: {
+            status: "ON_LEAVE",
+            notes: record.notes,
+            checkIn: null,
+            checkOut: null,
+            hoursWorked: null,
+          },
+          create: record,
+        });
       }
     }
 
     return NextResponse.json({
       success: true,
       data: updated,
-      message: "Leave request rejected.",
+      message: `Leave request ${status.toLowerCase()}.`,
     });
   } catch (error) {
     if (error instanceof Error && error.message === "Forbidden") {
