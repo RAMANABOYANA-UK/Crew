@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Runtime database
+database/crew.db
+
+# Uploaded files
+uploads/
+!uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
