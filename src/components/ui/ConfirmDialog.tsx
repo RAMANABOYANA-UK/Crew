@@ -29,7 +29,7 @@ export function ConfirmDialog({
   variant = "danger",
 }: ConfirmDialogProps) {
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="sm">
+    <Modal open={isOpen} title={title} onClose={onClose} width="md">
       <div className="flex flex-col items-center text-center gap-4">
         <div className="w-12 h-12 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 shrink-0">
           <AlertTriangle className="w-6 h-6" />
@@ -41,14 +41,14 @@ export function ConfirmDialog({
         </div>
 
         <div className="flex items-center justify-end gap-3 w-full pt-2">
-          <Button variant="outline" size="md" onClick={onClose} disabled={isLoading} className="w-full">
+          <Button variant="secondary" size="md" onClick={onClose} disabled={isLoading} className="w-full">
             {cancelText}
           </Button>
           <Button
             variant={variant === "danger" ? "danger" : "primary"}
             size="md"
             onClick={onConfirm}
-            isLoading={isLoading}
+            loading={isLoading}
             className="w-full"
           >
             {confirmText}
