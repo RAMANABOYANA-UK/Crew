@@ -1,23 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, handleApiError, hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { onboardEmployeeSchema } from "@/lib/validations/auth";
-import { generateLoginId } from "@/lib/login-id";
-import { hashPassword } from "@/lib/auth";
-import { computeSalaryBreakdown, DEFAULT_SALARY_CONFIG } from "@/lib/salary";
+import { scopeToSelf } from "@/lib/scope";
+import { logAuditEvent } from "@/lib/audit";
+import { z } from "zod";
 
-// GET /api/employees — Admin/HR views all employees with filtering
+const createEmployeeSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().optional(),
+  department: z.string().optional(),
+  designation: z.string().optional(),
+  role: z.enum(["ADMIN", "HR", "EMPLOYEE"]).default("EMPLOYEE"),
+  basicSalary: z.number().optional().default(0),
+  hra: z.number().optional().default(0),
+  allowances: z.number().optional().default(0),
+  wage: z.number().optional(),
+});
+
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    const session = await requireAdmin();
 
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
     const department = searchParams.get("department");
+    const requestedEmployeeId = searchParams.get("employeeId");
+
+    const scopedEmployeeId = scopeToSelf(session, requestedEmployeeId);
 
     const employees = await prisma.employee.findMany({
       where: {
         AND: [
+          scopedEmployeeId ? { id: scopedEmployeeId } : {},
           search
             ? {
                 OR: [
@@ -38,206 +54,147 @@ export async function GET(req: NextRequest) {
             email: true,
             role: true,
             loginId: true,
+            mustChangePassword: true,
           },
         },
-        payroll: true,
       },
       orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ success: true, data: employees });
   } catch (error) {
-    if (error instanceof Response) return error;
-    return NextResponse.json(
-      { success: false, message: "Forbidden" },
-      { status: 403 }
-    );
+    return handleApiError(error);
   }
 }
 
-// POST /api/employees — Admin/HR onboards new employee with initial credentials
+// POST /api/employees — Admin/HR provisions a new employee
 export async function POST(req: NextRequest) {
   try {
-    const adminUser = await requireAdmin();
+    const admin = await requireAdmin();
 
     const body = await req.json();
-    const parsed = onboardEmployeeSchema.safeParse(body);
+    const parsed = createEmployeeSchema.safeParse(body);
 
     if (!parsed.success) {
       return NextResponse.json(
         {
           success: false,
-          error: "Validation failed",
-          details: parsed.error.issues,
+          message: "Validation failed",
+          data: parsed.error.issues,
         },
         { status: 400 }
       );
     }
 
-    const {
-      firstName,
-      lastName,
-      email,
-      phone,
-      address,
-      department,
-      designation,
-      role,
-      wage,
-      loginId: customLoginId,
-      initialPassword: customPassword,
-    } = parsed.data;
+    const data = parsed.data;
 
-    // 1. Check if email already exists in User
+    // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: data.email },
     });
-
     if (existingUser) {
       return NextResponse.json(
-        {
-          success: false,
-          error: `An account with email ${email} already exists.`,
-        },
+        { success: false, message: "An employee account with this email already exists." },
         { status: 409 }
       );
     }
 
-    // 2. Generate or validate unique Login ID (e.g. OIRAKU20260001)
-    let loginId: string;
-    const joinDate = new Date();
-    const year = joinDate.getFullYear();
-
-    if (customLoginId?.trim()) {
-      loginId = customLoginId.trim().toUpperCase();
-      const existingLoginId = await prisma.user.findUnique({
-        where: { loginId },
-      });
-      if (existingLoginId) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Login ID ${loginId} is already in use. Please choose another.`,
-          },
-          { status: 409 }
-        );
-      }
-    } else {
-      loginId = await generateLoginId(firstName, lastName, joinDate);
-    }
-
-    // 3. Set Initial Password (custom or standard initial format DayflowYYYY!)
-    const initialPassword =
-      customPassword?.trim() || `Dayflow${year}!`;
-    const passwordHash = hashPassword(initialPassword);
-
+    // Generate Employee Sequence ID & Login ID
     const count = await prisma.employee.count();
-    const employeeId = `EMP${(count + 1).toString().padStart(3, "0")}`;
+    const seq = (count + 1).toString().padStart(3, "0");
+    const employeeId = `EMP${seq}`;
 
-    // 4. Create User and linked Employee profile
-    const user = await prisma.user.create({
-      data: {
-        loginId,
-        email,
-        passwordHash,
-        role,
-        mustChangePassword: true, // Requires password change on first login
-        isFirstLogin: true,
-      },
-    });
+    const year = new Date().getFullYear().toString();
+    const firstTwo = data.firstName.slice(0, 2).toUpperCase();
+    const lastTwo = data.lastName.slice(0, 2).toUpperCase();
+    const loginId = `OI${firstTwo}${lastTwo}${year}${seq.padStart(4, "0")}`;
 
-    const employee = await prisma.employee.create({
-      data: {
-        userId: user.id,
-        loginId,
-        employeeId,
-        firstName,
-        lastName,
-        email,
-        phone: phone || null,
-        address: address || null,
-        department: department || null,
-        designation: designation || null,
-        joinDate,
-      },
-    });
+    // Generate temporary password
+    const temporaryPassword = `Welcome@123`;
+    const passwordHash = hashPassword(temporaryPassword);
 
-    // 5. Initialize Payroll record
-    const salaryBreakdown = computeSalaryBreakdown(wage, DEFAULT_SALARY_CONFIG);
-    const payroll = await prisma.payroll.create({
-      data: {
-        employeeId: employee.id,
-        wage: salaryBreakdown.wage,
-        basicSalary: salaryBreakdown.basicSalary,
-        hra: salaryBreakdown.hra,
-        standardAllowance: salaryBreakdown.standardAllowance,
-        performanceBonus: salaryBreakdown.performanceBonus,
-        lta: salaryBreakdown.lta,
-        fixedAllowance: salaryBreakdown.fixedAllowance,
-        pfEmployee: salaryBreakdown.pfEmployee,
-        pfEmployer: salaryBreakdown.pfEmployer,
-        professionalTax: salaryBreakdown.professionalTax,
-        netPayable: salaryBreakdown.netPayable,
-        payableDays: 22,
-        totalWorkingDays: 22,
-      },
-    });
-
-    // Record immutable audit entry
-    try {
-      const { logAuditEvent } = await import("@/lib/audit");
-      await logAuditEvent({
-        actorId: adminUser.id,
-        actorEmail: adminUser.email,
-        action: "EMPLOYEE_CREATED",
-        entityType: "Employee",
-        entityId: employee.id,
-        newValues: {
-          employeeId: employee.employeeId,
+    // Create User & Employee in a transaction with identical User.role and Employee.role
+    const [user, employee] = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
           loginId,
-          email,
-          role,
-          department,
-          designation,
-          wage,
+          email: data.email,
+          passwordHash,
+          role: data.role,
+          mustChangePassword: true,
+          isFirstLogin: true,
         },
       });
-    } catch (auditErr) {
-      console.error("Failed to write audit log for employee onboarding:", auditErr);
-    }
+
+      const e = await tx.employee.create({
+        data: {
+          userId: u.id,
+          loginId,
+          employeeId,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          phone: data.phone || null,
+          department: data.department || null,
+          designation: data.designation || null,
+          dateOfJoining: new Date(),
+          role: data.role,
+          status: "ACTIVE",
+          basicSalary: data.basicSalary,
+          hra: data.hra,
+          allowances: data.allowances,
+        },
+      });
+
+      // Create initial JobHistory entry
+      await tx.employeeJobHistory.create({
+        data: {
+          employeeId: e.id,
+          field: "status",
+          oldValue: null,
+          newValue: "ACTIVE",
+          reason: "Initial onboarding and account provisioning",
+          changedBy: admin.id,
+        },
+      });
+
+      return [u, e];
+    });
+
+    // Write AuditLog entry for EMPLOYEE_CREATED
+    await logAuditEvent({
+      actorId: admin.id,
+      actorEmail: admin.email,
+      action: "EMPLOYEE_CREATED",
+      entityType: "Employee",
+      entityId: employee.id,
+      newValues: {
+        employeeId: employee.employeeId,
+        loginId: employee.loginId,
+        email: employee.email,
+        role: employee.role,
+      },
+    });
 
     return NextResponse.json(
       {
         success: true,
-        message: "Employee onboarded successfully.",
         data: {
-          employee: {
-            ...employee,
-            user: {
-              id: user.id,
-              loginId: user.loginId,
-              email: user.email,
-              role: user.role,
-              mustChangePassword: user.mustChangePassword,
-            },
-            payroll,
+          user: {
+            id: user.id,
+            loginId: user.loginId,
+            email: user.email,
+            role: user.role,
+            mustChangePassword: user.mustChangePassword,
           },
-          // Return initial credentials for HR to provide to employee
-          credentials: {
-            loginId,
-            initialPassword,
-            mustChangePassword: true,
-          },
+          employee,
+          temporaryPassword,
         },
+        message: "Employee account provisioned successfully.",
       },
       { status: 201 }
     );
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Employee onboarding error:", error);
-    return NextResponse.json(
-      { success: false, error: "Internal server error during onboarding" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

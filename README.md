@@ -2,54 +2,274 @@
 
 **Every workday, perfectly aligned.**
 
-Crew is a Human Resource Management System (HRMS) frontend covering authentication, employee directory, profiles, attendance, time-off/leave management, and payroll visibility — built around two roles: **Admin/HR Officer** and **Employee**.
+Crew started as a simple idea: HR tools shouldn’t feel heavy, broken, or stuck in 2012.
 
-This repo currently contains the **product spec and frontend build prompt** used to generate the app with Antigravity. Application code will live alongside this file once scaffolded.
+So we built an HRMS that actually helps people get through the workday — check in, apply for leave, see payroll, and let admins approve things without chasing spreadsheets.
 
----
-
-## 🧭 What Crew Does
-
-| Module | Summary |
-|---|---|
-| **Authentication** | Sign In / Sign Up, system-generated Login IDs, admin-provisioned employee accounts |
-| **Employee Directory** | Searchable card/list grid of employees with live status (present / on leave / absent) |
-| **Profile** | Resume, Private Info, Salary Info (admin-only), and Security tabs per employee |
-| **Attendance** | Check In/Out, daily/weekly views, admin-wide visibility, feeds payroll |
-| **Time Off** | Paid / Sick / Unpaid leave requests, calendar view, admin approve/reject workflow |
-| **Payroll (stub)** | Read-only payslip view for employees, editable salary structure for admins |
-
-Full role-by-role permissions are in **§10** of the prompt file.
+This is **Crew**.
 
 ---
 
-## 🎨 Design Direction
+## Why we built this
 
-Crew follows a **professional, minimal, office-appropriate** visual style:
+Most HR systems are either:
 
-- Light theme, clean surfaces, hairline borders, flat/minimal shadows
-- One accent color (deep violet `#6D4AFF`) used sparingly for primary actions
-- **Token-driven CSS** — every color/radius/shadow is a CSS custom property, never a hardcoded hex value in a component
-- Componentized, reusable patterns (one `Tabs` component, one segmented-control pattern) rather than one-off styles per screen — modeled after the [Uiverse "Cirrus"](https://uiverse.io) design system's approach to tokens and state-driven CSS
+- too complex for a small team, or  
+- too basic to trust in a real demo
 
-Full color palette, typography scale, spacing rules, and the token/component methodology are in **§2** of the prompt file.
+We wanted something in between.
+
+Something modern.  
+Something that works online *and* offline.  
+Something where an employee dashboard and an admin dashboard actually feel different.
+
+That’s Crew.
+
+---
+
+## What Crew can do
+
+### For employees
+- Log in with a company Login ID  
+- Check in / check out  
+- Apply for leave (with real balance checks)  
+- See their own attendance history  
+- View payroll breakdown  
+
+### For HR / Admin
+- See all employees  
+- Approve or reject leave requests  
+- Spot attendance risks (people who are often late or absent)  
+- Review corrections  
+- Track payroll anomalies  
+- Read audit logs for important actions  
+
+No clutter. Just the flows that matter in a real office.
 
 ---
 
-## 🛠️ Recommended Tech Stack
+## The stack (kept practical)
 
-- React 18+ / TypeScript / Vite
-- React Router v6
-- Tailwind CSS + CSS custom-property token layer
-- React Query (server state) + Zustand/Context (UI state)
-- React Hook Form + Zod
-- Lucide React (icons), date-fns, Recharts (analytics)
+We didn’t add tech for the sake of it.
 
-## ⚠️ Known Open Questions
+- **Next.js 15** — app + API in one place  
+- **PostgreSQL + Prisma** — real database, real relations  
+- **JWT + bcrypt** — simple, controllable auth  
+- **Zod** — validation on the way in  
+- **Docker** — so the whole thing can run locally without depending on the cloud  
 
-Two ambiguities between the original wireframe and the requirements doc were resolved with explicit assumptions rather than left unspecified — flagged for stakeholder review before pixel-perfect implementation:
+If the internet drops during a demo, Crew can still run on a local Postgres container.
 
-1. **Self-registration vs. admin-provisioned accounts** — the PRD describes a general sign-up flow, while the wireframe states only Admin/HR can create employee accounts (with system-generated Login ID + temp password). The prompt treats Sign Up as **first-admin/company registration only**; all other employees are provisioned by Admin/HR.
-2. **Employee-facing salary visibility** — the wireframe's employee "My Profile" view has no Salary Info tab, but the PRD requires employees be able to view their own payroll read-only. The prompt surfaces this as a **read-only Salary Info section inside Private Info** for employees.
+That mattered to us.
 
 ---
+
+## Features we’re proud of
+
+### 1. Leave that doesn’t lie
+When someone applies for leave, Crew checks:
+- overlapping dates  
+- remaining balance  
+- leave type  
+
+Low-risk 1-day requests can even auto-approve.  
+Everything else goes to HR.
+
+### 2. Attendance with context
+Not just present/absent.
+
+Admins can open risk view and immediately see:
+- who’s frequently late  
+- who has high absences  
+
+Useful in a demo. Useful in real life too.
+
+### 3. Payroll connected to reality
+Payroll isn’t a static number.
+
+It looks at attendance, working days, and salary structure — then calculates what should actually be paid.
+
+### 4. Offline mode
+Run this with Docker:
+
+```bash
+docker-compose up -d
+```
+
+Same schema. Same app. No cloud required after setup.
+
+---
+
+## Run it yourself
+
+### Quick local setup
+
+```bash
+git clone https://github.com/RAMANABOYANA-UK/Crew.git
+cd Crew
+npm install
+cp .env.example .env.local
+```
+
+Put this in `.env.local` for local mode:
+
+```env
+JWT_SECRET=any-long-random-string
+DATABASE_URL="postgresql://dayflow:dayflow123@localhost:5432/dayflow?schema=public"
+```
+
+Then:
+
+```bash
+docker-compose up -d
+npx prisma generate
+npx prisma db push
+npm run seed
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000)
+
+---
+
+## Seeded demo world
+
+The seed script creates a small company:
+
+- one Admin  
+- one HR  
+- several employees across Engineering, Design, Marketing, Finance, Sales  
+
+With attendance history, leave requests, and payroll data already there.
+
+So you don’t demo an empty app.
+
+> Temporary passwords are set in `prisma/seed.ts`.  
+> First login may ask for a password change — that’s intentional.
+
+---
+
+## How auth works
+
+We removed third-party auth complexity and kept it direct:
+
+1. Admin/HR provisions the employee  
+2. Employee logs in with Login ID + password  
+3. Server returns a JWT in an HTTP-only cookie  
+4. Protected routes use `requireAuth()` / `requireAdmin()`
+
+Public self-signup is disabled on purpose.  
+In real companies, HR creates accounts — not strangers on the internet.
+
+---
+
+## API map (short version)
+
+| Area | What it covers |
+|------|----------------|
+| `/api/auth/*` | login, logout, me, change-password |
+| `/api/profile` | view + update profile |
+| `/api/employees` | directory + employee details |
+| `/api/attendance/*` | check-in/out, history, risk, corrections |
+| `/api/leave/*` | apply, list, approve/reject |
+| `/api/payroll/*` | payslip, config, anomalies |
+| `/api/notifications` | in-app notifications |
+| `/api/analytics/*` | overview + summaries |
+| `/api/audit` | immutable activity log |
+
+Every response follows one shape:
+
+```json
+{
+  "success": true,
+  "data": {},
+  "message": "optional"
+}
+```
+
+Because consistency saves everyone time.
+
+---
+
+## Roles, simply
+
+**Employee**  
+Does their own work: attendance, leave, profile, own payroll.
+
+**HR**  
+Handles people operations: approvals, employee list, risk signals.
+
+**Admin**  
+Full control: config, audit, anomalies, system-level actions.
+
+---
+
+## Scripts you’ll actually use
+
+```bash
+npm run dev      # start developing
+npm run seed     # fill the database
+npm run test     # backend checks
+npm run build    # production build
+```
+
+---
+
+## Deploying
+
+Crew deploys cleanly on Vercel.
+
+You’ll need:
+- a cloud Postgres URL  
+- `JWT_SECRET`  
+- `DATABASE_URL`
+
+After deploy, run schema push + seed against the cloud database once.
+
+---
+
+## A good demo path
+
+If you’re showing this in 3–4 minutes:
+
+1. Login as employee  
+2. Check in  
+3. Apply leave  
+4. Switch to admin  
+5. Approve leave  
+6. Show attendance risk  
+7. Open payroll  
+8. Mention offline Docker support  
+
+That’s the whole story.
+
+---
+
+## What’s next
+
+Possible improvements we’re thinking about:
+- payslip PDF download  
+- better notification center UI  
+- tighter mobile layout  
+- more polished admin insights  
+
+But the core is already solid: real auth, real database, real workflows.
+
+---
+
+## Team
+
+Built during a hackathon by the Crew team — with a focus on making the backend trustworthy first, then making the experience feel clean.
+
+If something breaks, it’s probably the database URL.  
+It always is.
+
+---
+
+## Final note
+
+Crew isn’t trying to be “every HR feature ever.”
+
+It’s trying to be the HR system you’d actually use on a Monday morning.
+
+That’s the goal.
