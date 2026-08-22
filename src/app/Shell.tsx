@@ -41,7 +41,7 @@ export function Shell() {
   const activitiesQ = useQuery({ queryKey: QK.activities, queryFn: () => api.getActivities() });
 
   const logo = companyQ.data?.logo ?? null;
-  const brand = companyQ.data?.name ?? 'CREW HRMS';
+  const isAdmin = role === 'admin';
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -59,48 +59,70 @@ export function Shell() {
     navigate('/signin', { replace: true });
   }
 
-  const primaryNavItems = [
-    { to: role === 'admin' ? '/employees' : '/dashboard', label: 'Dashboard', icon: <Building2 size={15} /> },
-    { to: '/attendance', label: 'Attendance & Time', icon: <Clock3 size={15} /> },
-    { to: '/time-off', label: 'Leaves & Time Off', icon: <Calendar size={15} /> },
-    { to: '/payroll', label: 'Payroll & Compensation', icon: <Wallet size={15} /> },
-    { to: '/profile', label: 'My Profile', icon: <UserRound size={15} /> },
+  // Dedicated navigation for HR / Admin
+  const adminNavItems = [
+    { to: '/employees', label: 'Employee Directory', icon: <UserPlus size={15} /> },
+    { to: '/attendance', label: 'Company Attendance', icon: <Clock3 size={15} /> },
+    { to: '/time-off', label: 'Leave Approval Hub', icon: <Calendar size={15} /> },
+    { to: '/payroll', label: 'Payroll & Wage Engine', icon: <Wallet size={15} /> },
+    { to: '/profile', label: 'HR Profile', icon: <UserRound size={15} /> },
   ];
 
-  if (role === 'admin') {
-    primaryNavItems.splice(1, 0, { to: '/employees', label: 'Employee Directory', icon: <UserPlus size={15} /> });
-  }
+  const adminExtraItems = [
+    { label: 'Audit Logs', icon: <ShieldCheck size={15} /> },
+    { label: 'Payroll Anomalies', icon: <AlertTriangle size={15} /> },
+    { label: 'Company Salary Master', icon: <Award size={15} /> },
+    { label: 'Shift Allocation', icon: <Clock3 size={15} /> },
+    { label: 'HR Policies', icon: <FileText size={15} /> },
+    { label: 'Recruitment & Onboarding', icon: <Building2 size={15} /> },
+    { label: 'Broadcast Announcements', icon: <Megaphone size={15} /> },
+  ];
 
-  const extraNavItems = [
-    { label: 'Performance Reviews', icon: <Award size={15} /> },
-    { label: 'Company Policies', icon: <FileText size={15} /> },
+  // Dedicated navigation for Employees (Self-Service)
+  const employeeNavItems = [
+    { to: '/dashboard', label: 'My Dashboard', icon: <Building2 size={15} /> },
+    { to: '/profile', label: 'My Profile & Records', icon: <UserRound size={15} /> },
+    { to: '/attendance', label: 'My Attendance Logs', icon: <Clock3 size={15} /> },
+    { to: '/time-off', label: 'Apply Leave / Time-Off', icon: <Calendar size={15} /> },
+    { to: '/payroll', label: 'My Payslips & Wage', icon: <Wallet size={15} /> },
+  ];
+
+  const employeeExtraItems = [
     { label: 'Holiday Calendar', icon: <Calendar size={15} /> },
-    { label: 'Shift Schedules', icon: <Clock3 size={15} /> },
+    { label: 'Shift Schedule', icon: <Clock3 size={15} /> },
     { label: 'Training & Development', icon: <BookOpen size={15} /> },
-    { label: 'Helpdesk & Support', icon: <HelpCircle size={15} /> },
-    { label: 'Compliance & Clearance', icon: <ShieldCheck size={15} /> },
+    { label: 'IT & HR Helpdesk', icon: <HelpCircle size={15} /> },
     { label: 'Company Announcements', icon: <Megaphone size={15} /> },
-    { label: 'Projects & Tasks', icon: <FolderGit2 size={15} /> },
+    { label: 'My Assigned Projects', icon: <FolderGit2 size={15} /> },
   ];
+
+  const currentNavItems = isAdmin ? adminNavItems : employeeNavItems;
+  const currentExtraItems = isAdmin ? adminExtraItems : employeeExtraItems;
 
   return (
     <div className="flex min-h-screen bg-[#f1f5f9]">
       <aside className="portal-sidebar hidden md:flex w-[240px] flex-col border-r border-[#e2e8f0] bg-white">
+        {/* Brand Header */}
         <div className="flex items-center gap-2.5 p-3.5 border-b border-[#e2e8f0]">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#6d4aff] font-bold text-white shadow-sm flex-shrink-0">
+          <div className={`flex h-9 w-9 items-center justify-center rounded-md font-bold text-white shadow-sm flex-shrink-0 ${isAdmin ? 'bg-[#4f46e5]' : 'bg-[#0284c7]'}`}>
             {logo ? <img src={logo} alt="" className="h-7 w-7 object-contain" /> : <Building2 size={20} />}
           </div>
           <div className="flex flex-col">
-            <span className="text-[13px] font-black leading-tight tracking-tight text-[#432db5]">CREW HRMS</span>
-            <span className="text-[10px] font-bold tracking-tight text-[#64748b] uppercase leading-none">{company?.name || 'ENTERPRISE PORTAL'}</span>
+            <span className={`text-[13px] font-black leading-tight tracking-tight ${isAdmin ? 'text-[#4338ca]' : 'text-[#0369a1]'}`}>
+              {isAdmin ? 'CREW HR ADMIN' : 'CREW EMPLOYEE'}
+            </span>
+            <span className="text-[10px] font-bold tracking-tight text-[#64748b] uppercase leading-none">
+              {isAdmin ? 'Management Console' : 'Self-Service Portal'}
+            </span>
           </div>
         </div>
 
+        {/* Search */}
         <div className="px-3 py-2.5 bg-white border-b border-[#f1f5f9]">
           <div className="relative flex items-center">
             <input
               type="text"
-              placeholder="Search directory..."
+              placeholder={isAdmin ? "Search employees, logs..." : "Search services, policies..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded border border-[#cbd5e1] bg-[#f8fafc] px-2.5 py-1 text-[11.5px] text-[#0f172a] placeholder-[#94a3b8] focus:border-[#0284c7] focus:bg-white focus:outline-none"
@@ -109,19 +131,27 @@ export function Shell() {
           </div>
         </div>
 
+        {/* Section Title */}
         <div className="px-3 pt-3 pb-1">
-          <div className="w-full rounded bg-[#f8fafc] border border-[#e2e8f0] py-1.5 px-3 text-left text-[12px] font-semibold text-[#0369a1] flex items-center gap-2">
-            <BookOpen size={13} className="text-[#0284c7]" /> Employee Workspace
+          <div className={`w-full rounded border py-1.5 px-3 text-left text-[12px] font-semibold flex items-center gap-2 ${isAdmin ? 'bg-[#eef2ff] border-[#c7d2fe] text-[#4338ca]' : 'bg-[#f0f9ff] border-[#bae6fd] text-[#0369a1]'}`}>
+            <BookOpen size={13} /> {isAdmin ? 'HR Administration' : 'Employee Workspace'}
           </div>
         </div>
 
+        {/* Primary Links */}
         <nav className="flex-1 overflow-y-auto py-1 px-1.5">
-          {primaryNavItems.map((it) => (
+          {currentNavItems.map((it) => (
             <NavLink
               key={it.to}
               to={it.to}
               className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 rounded text-[12.5px] font-medium transition ${isActive ? 'bg-[#e0f2fe] text-[#0369a1]' : 'text-[#475569] hover:bg-[#f1f5f9]'}`
+                `flex items-center gap-2.5 px-3 py-2 rounded text-[12.5px] font-medium transition ${
+                  isActive
+                    ? isAdmin
+                      ? 'bg-[#eef2ff] text-[#4338ca] font-bold'
+                      : 'bg-[#e0f2fe] text-[#0369a1] font-bold'
+                    : 'text-[#475569] hover:bg-[#f1f5f9]'
+                }`
               }
             >
               {it.icon}
@@ -131,11 +161,11 @@ export function Shell() {
 
           <div className="my-2 border-t border-[#f1f5f9]" />
 
-          {extraNavItems.map((it, idx) => (
+          {currentExtraItems.map((it, idx) => (
             <div
               key={idx}
               className="flex items-center gap-2.5 px-3 py-2 rounded text-[12.5px] font-medium text-[#475569] hover:bg-[#f1f5f9] opacity-75 hover:opacity-100 cursor-pointer"
-              onClick={() => navigate(it.label.includes('Leave') ? '/time-off' : '/dashboard')}
+              onClick={() => navigate(isAdmin ? '/employees' : '/dashboard')}
             >
               {it.icon}
               {it.label}
@@ -153,9 +183,9 @@ export function Shell() {
             >
               {mobileOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#475569]">
-              <span className="rounded bg-[#f1f5f9] px-2.5 py-1 text-[#0369a1] border border-[#e2e8f0]">
-                FY 2026-2027 · {role === 'admin' ? 'HR Administration' : 'Full-Time Employee'}
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              <span className={`rounded px-2.5 py-1 border ${isAdmin ? 'bg-[#eef2ff] text-[#4338ca] border-[#c7d2fe]' : 'bg-[#f0f9ff] text-[#0369a1] border-[#bae6fd]'}`}>
+                {isAdmin ? 'HR Admin Portal · Organization Overview' : `Employee Self-Service · ${user?.designation || 'Staff'}`}
               </span>
             </div>
           </div>
@@ -240,7 +270,7 @@ export function Shell() {
 
         {mobileOpen && (
           <nav aria-label="Mobile" className="border-b border-[#e2e8f0] bg-white px-4 py-2 md:hidden">
-            {primaryNavItems.map((it) => (
+            {currentNavItems.map((it) => (
               <NavLink
                 key={it.to}
                 to={it.to}
