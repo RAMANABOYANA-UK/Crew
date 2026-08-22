@@ -1,3 +1,4 @@
+import React from 'react';
 import { initials } from '@/lib/utils';
 
 const FALLBACK = ['#6d4aff', '#0694a2', '#f59e0b', '#e5484d', '#2f6fed', '#22a06b', '#8b5cf6', '#0ea5e9', '#f0b429'];
@@ -19,11 +20,11 @@ export function Avatar({
   src?: string | null;
   photo?: string | null;
   color?: string;
-  size?: number | 'sm' | 'md' | 'lg';
+  size?: number | 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
   title?: string;
 }) {
-  const numericSize = typeof size === 'number' ? size : size === 'sm' ? 28 : size === 'lg' ? 48 : 34;
+  const numericSize = typeof size === 'number' ? size : size === 'sm' ? 28 : size === 'lg' ? 48 : size === 'xl' ? 64 : 34;
   const fullName = (name || `${firstName || ''} ${lastName || ''}`.trim()) || 'User';
   const imgUrl = photo || src;
   const parts = fullName.trim().split(/\s+/);

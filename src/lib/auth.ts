@@ -166,12 +166,9 @@ export async function requireRole(allowedRoles: string | string[]) {
   return session;
 }
 
-// Helper to keep Employee.role mirrored to User.role
-export async function syncEmployeeRole(userId: string, role: "ADMIN" | "HR" | "EMPLOYEE") {
-  await prisma.employee.updateMany({
-    where: { userId },
-    data: { role },
-  });
+// Role lives exclusively on User model (single source of truth)
+export async function syncEmployeeRole(_userId: string, _role: "ADMIN" | "HR" | "EMPLOYEE") {
+  // No-op: Role lives only on User model
 }
 
 // Standardized API Error Handler

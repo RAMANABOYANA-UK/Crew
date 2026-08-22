@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
-interface ModalProps {
-  open: boolean;
+export interface ModalProps {
+  open?: boolean;
+  isOpen?: boolean;
   title: string;
+  description?: string;
   onClose: () => void;
   children: React.ReactNode;
   footer?: React.ReactNode;
@@ -11,20 +13,21 @@ interface ModalProps {
   closeOnBackdrop?: boolean;
 }
 
-export function Modal({ open, title, onClose, children, footer, width = 'md', closeOnBackdrop = true }: ModalProps) {
+export function Modal({ open, isOpen, title, description, onClose, children, footer, width = 'md', closeOnBackdrop = true }: ModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const isModalOpen = open ?? isOpen ?? false;
 
   useEffect(() => {
-    if (!open) return;
+    if (!isModalOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose();
     }
     document.addEventListener('keydown', onKey);
     closeRef.current?.focus();
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [isModalOpen, onClose]);
 
-  if (!open) return null;
+  if (!isModalOpen) return null;
 
   return (
     <div
@@ -40,7 +43,10 @@ export function Modal({ open, title, onClose, children, footer, width = 'md', cl
         aria-label={title}
       >
         <div className="crew-modal__head">
-          <h2 className="crew-modal__title">{title}</h2>
+          <div>
+            <h2 className="crew-modal__title">{title}</h2>
+            {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+          </div>
           <button
             ref={closeRef}
             onClick={onClose}

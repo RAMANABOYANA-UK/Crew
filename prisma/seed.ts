@@ -110,7 +110,6 @@ async function main() {
         department: emp.department,
         designation: emp.designation,
         dateOfJoining: emp.dateOfJoining,
-        role: emp.role,
         paidLeaveBalance: 12,
         sickLeaveBalance: 6,
         unpaidLeaveBalance: 0,

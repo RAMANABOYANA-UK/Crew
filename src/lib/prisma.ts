@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
@@ -14,9 +14,13 @@ function createPrismaClient() {
     return { prisma: null, pool: null };
   }
   try {
+    const isLocal =
+      connectionString.includes("localhost") ||
+      connectionString.includes("127.0.0.1");
+
     const pool = new Pool({
       connectionString,
-      ssl: { rejectUnauthorized: false },
+      ssl: isLocal ? false : { rejectUnauthorized: false },
       max: 5,
     });
     const adapter = new PrismaPg(pool);

@@ -1,5 +1,5 @@
-import ClientApp from './ClientApp';
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <ClientApp />;
+  redirect("/dashboard");
 }

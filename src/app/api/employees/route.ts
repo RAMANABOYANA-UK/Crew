@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
         employeeId: employee.employeeId,
         loginId: employee.loginId,
         email: employee.email,
-        role: employee.role,
+        role: user.role,
       },
     });
 

@@ -90,7 +90,6 @@ model Employee {
   designation        String?
   dateOfJoining      DateTime?
   profilePic         String?
-  role               Role                   @default(EMPLOYEE)
   status             EmployeeStatus         @default(ACTIVE)
 
   paidLeaveBalance   Int                    @default(12)
