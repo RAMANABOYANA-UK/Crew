@@ -112,11 +112,11 @@ export async function getCurrentEmployee() {
   try {
     const { userId } = await auth();
     if (userId) {
-      const employee = await prisma.employee.findUnique({
-        where: { clerkUserId: userId },
-        include: { user: true },
+      const user = await prisma.user.findFirst({
+        where: { OR: [{ clerkId: userId }, { id: userId }] },
+        include: { employee: true },
       });
-      if (employee) return employee;
+      if (user?.employee) return { ...user.employee, user };
     }
   } catch {
     // Clerk not configured or error
@@ -152,11 +152,14 @@ export async function requireAuth() {
     throw new Error("Unauthorized");
   }
 
+  const effectiveUser = user || (employee as { user?: typeof user })?.user;
   return {
-    ...(user || {}),
-    user: user || undefined,
+    ...(effectiveUser || {}),
+    id: effectiveUser?.id || employee?.userId || employee?.id || "",
+    email: effectiveUser?.email || employee?.email || "",
+    user: effectiveUser || undefined,
     employee: employee || user?.employee || null,
-    role: employee?.role || user?.role || "EMPLOYEE",
+    role: effectiveUser?.role || "EMPLOYEE",
   };
 }
 
@@ -184,11 +187,12 @@ export async function syncEmployee() {
   const email = clerkUser.emailAddresses[0]?.emailAddress;
   if (!email) return null;
 
-  let employee = await prisma.employee.findUnique({
-    where: { clerkUserId: clerkUser.id },
+  let user = await prisma.user.findFirst({
+    where: { OR: [{ clerkId: clerkUser.id }, { email }] },
+    include: { employee: true },
   });
 
-  if (!employee) {
+  if (!user) {
     const firstName = clerkUser.firstName || "New";
     const lastName = clerkUser.lastName || "User";
     const year = new Date().getFullYear();
@@ -199,23 +203,30 @@ export async function syncEmployee() {
       .toUpperCase()}${year}${random}`;
     const employeeId = `EMP${Date.now().toString().slice(-4)}`;
 
-    employee = await prisma.employee.create({
+    user = await prisma.user.create({
       data: {
-        clerkUserId: clerkUser.id,
-        loginId,
-        employeeId,
+        clerkId: clerkUser.id,
         email,
-        firstName,
-        lastName,
+        loginId,
         role: "EMPLOYEE",
-        status: "ACTIVE",
-        dateOfJoining: new Date(),
-        joinDate: new Date(),
+        mustChangePassword: false,
+        employee: {
+          create: {
+            loginId,
+            employeeId,
+            email,
+            firstName,
+            lastName,
+            status: "ACTIVE",
+            joinDate: new Date(),
+          },
+        },
       },
+      include: { employee: true },
     });
   }
 
-  return employee;
+  return user?.employee || null;
 }
 
 export const syncUser = syncEmployee;

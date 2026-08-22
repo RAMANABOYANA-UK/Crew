@@ -7,7 +7,7 @@
 
 import { headers } from "next/headers";
 import { prisma } from "./prisma";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "../generated/prisma/client";
 
 export interface LogAuditOptions {
   actorId?: string | null;

@@ -20,7 +20,7 @@ export async function GET() {
         lastName: true,
         department: true,
         designation: true,
-        profilePicture: true,
+        profilePic: true,
       },
     });
 
@@ -77,7 +77,7 @@ export async function GET() {
         lastName: emp.lastName,
         department: emp.department,
         designation: emp.designation,
-        profilePicture: emp.profilePicture,
+        profilePic: emp.profilePic,
         statusDot,
         statusEmoji,
         statusLabel,

@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     // Update employee record
     const updatedEmployee = await prisma.employee.update({
       where: { id: employee.id },
-      data: { profilePic: publicUrl, profilePicture: publicUrl },
+      data: { profilePic: publicUrl },
       include: {
         user: {
           select: {

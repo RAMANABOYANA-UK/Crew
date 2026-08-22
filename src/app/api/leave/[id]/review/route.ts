@@ -58,7 +58,7 @@ export async function PATCH(
       data: {
         status,
         adminComment: adminComment || null,
-        reviewedBy: admin.employee?.clerkUserId || admin.id,
+        reviewedBy: admin.employee?.loginId || admin.id,
         reviewedAt: new Date(),
       },
       include: {
@@ -73,23 +73,6 @@ export async function PATCH(
         },
       },
     });
-
-    // On Approval: deduct days from employee leave balance
-    if (status === "APPROVED") {
-      if (leaveRequest.leaveType === "PAID" || leaveRequest.leaveType === "CASUAL") {
-        const currentBalance = leaveRequest.employee.paidLeaveBalance ?? 12;
-        await prisma.employee.update({
-          where: { id: leaveRequest.employeeId },
-          data: { paidLeaveBalance: Math.max(0, currentBalance - leaveRequest.totalDays) },
-        });
-      } else if (leaveRequest.leaveType === "SICK") {
-        const currentBalance = leaveRequest.employee.sickLeaveBalance ?? 6;
-        await prisma.employee.update({
-          where: { id: leaveRequest.employeeId },
-          data: { sickLeaveBalance: Math.max(0, currentBalance - leaveRequest.totalDays) },
-        });
-      }
-    }
 
     // Notify the employee about the review decision
     if (updated.employee.userId) {
@@ -114,7 +97,7 @@ export async function PATCH(
     try {
       const { logAuditEvent } = await import("@/lib/audit");
       await logAuditEvent({
-        actorId: admin.userId,
+        actorId: admin.id,
         actorEmail: admin.email,
         action: `LEAVE_${status}`,
         entityType: "LeaveRequest",

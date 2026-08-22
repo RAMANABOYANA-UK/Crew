@@ -66,9 +66,8 @@ model User {
 
 model Employee {
   id                 String         @id @default(cuid())
-  clerkUserId        String?        @unique
-  userId             String?        @unique
-  user               User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String         @unique
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   loginId            String?        @unique
   employeeId         String?        @unique
@@ -78,17 +77,10 @@ model Employee {
   phone              String?
   department         String?
   designation        String?
-  dateOfJoining      DateTime?
   joinDate           DateTime?
   profilePic         String?
-  profilePicture     String?
-  role               Role           @default(EMPLOYEE)
   address            String?
   status             EmployeeStatus @default(ACTIVE)
-
-  paidLeaveBalance   Int            @default(12)
-  sickLeaveBalance   Int            @default(6)
-  unpaidLeaveBalance Int            @default(0)
 
   basicSalary        Decimal        @default(0) @db.Decimal(10, 2)
   hra                Decimal        @default(0) @db.Decimal(10, 2)

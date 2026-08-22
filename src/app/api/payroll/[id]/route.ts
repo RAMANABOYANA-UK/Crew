@@ -11,7 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
     const { id } = await params;
 
     const body = await request.json();
@@ -110,9 +110,8 @@ export async function PATCH(
     // Record immutable audit entry
     try {
       const { logAuditEvent } = await import("@/lib/audit");
-      const admin = await requireRole(["ADMIN", "HR"]);
       await logAuditEvent({
-        actorId: admin.userId,
+        actorId: admin.id,
         actorEmail: admin.email,
         action: "WAGE_UPDATED",
         entityType: "Payroll",

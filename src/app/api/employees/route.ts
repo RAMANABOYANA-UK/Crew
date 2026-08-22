@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
       designation,
       role,
       wage,
-      customLoginId,
-      customPassword,
+      loginId: customLoginId,
+      initialPassword: customPassword,
     } = parsed.data;
 
     // 1. Check if email already exists in User

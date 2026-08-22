@@ -39,9 +39,17 @@ export async function POST(request: NextRequest) {
     const totalDays =
       Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    // Check remaining leave balance
+    // Check remaining leave balance dynamically
     if (leaveType === "PAID" || leaveType === "CASUAL") {
-      const currentBalance = employee.paidLeaveBalance ?? 12;
+      const approvedPaid = await prisma.leaveRequest.aggregate({
+        where: {
+          employeeId: employee.id,
+          status: "APPROVED",
+          leaveType: { in: ["PAID", "CASUAL"] },
+        },
+        _sum: { totalDays: true },
+      });
+      const currentBalance = Math.max(0, 12 - (approvedPaid._sum.totalDays || 0));
       if (totalDays > currentBalance) {
         return NextResponse.json(
           {
@@ -52,7 +60,15 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (leaveType === "SICK") {
-      const currentBalance = employee.sickLeaveBalance ?? 6;
+      const approvedSick = await prisma.leaveRequest.aggregate({
+        where: {
+          employeeId: employee.id,
+          status: "APPROVED",
+          leaveType: "SICK",
+        },
+        _sum: { totalDays: true },
+      });
+      const currentBalance = Math.max(0, 6 - (approvedSick._sum.totalDays || 0));
       if (totalDays > currentBalance) {
         return NextResponse.json(
           {
@@ -157,13 +173,20 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
+    const approvedPaidDays = leaveRequests
+      .filter((l) => l.status === "APPROVED" && (l.leaveType === "PAID" || l.leaveType === "CASUAL"))
+      .reduce((sum, l) => sum + l.totalDays, 0);
+    const approvedSickDays = leaveRequests
+      .filter((l) => l.status === "APPROVED" && l.leaveType === "SICK")
+      .reduce((sum, l) => sum + l.totalDays, 0);
+
     const summary = {
       total: leaveRequests.length,
       pending: leaveRequests.filter((l) => l.status === "PENDING").length,
       approved: leaveRequests.filter((l) => l.status === "APPROVED").length,
       rejected: leaveRequests.filter((l) => l.status === "REJECTED").length,
-      paidBalance: employee.paidLeaveBalance ?? 12,
-      sickBalance: employee.sickLeaveBalance ?? 6,
+      paidBalance: Math.max(0, 12 - approvedPaidDays),
+      sickBalance: Math.max(0, 6 - approvedSickDays),
     };
 
     return NextResponse.json({

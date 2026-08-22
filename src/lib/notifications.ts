@@ -5,7 +5,7 @@
  */
 
 import { prisma } from "./prisma";
-import { NotificationType } from "@/generated/prisma";
+import { NotificationType } from "../generated/prisma/enums";
 import { sendEmailAlert } from "./email";
 
 export interface CreateNotificationParams {

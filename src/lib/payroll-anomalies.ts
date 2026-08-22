@@ -9,7 +9,7 @@
  */
 
 import { prisma } from "./prisma";
-import { AnomalySeverity, Prisma } from "@/generated/prisma/client";
+import { AnomalySeverity, Prisma } from "../generated/prisma/client";
 
 export interface DetectedAnomaly {
   employeeId: string;

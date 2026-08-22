@@ -50,7 +50,7 @@ export async function GET() {
 // PATCH /api/payroll/config — Admin/HR updates salary configuration
 export async function PATCH(request: NextRequest) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     const body = await request.json();
     const parsed = updateSalaryConfigSchema.safeParse(body);
@@ -91,9 +91,8 @@ export async function PATCH(request: NextRequest) {
     // Record immutable audit entry
     try {
       const { logAuditEvent } = await import("@/lib/audit");
-      const admin = await requireRole(["ADMIN", "HR"]);
       await logAuditEvent({
-        actorId: admin.userId,
+        actorId: admin.id,
         actorEmail: admin.email,
         action: "SALARY_CONFIG_UPDATED",
         entityType: "SalaryConfig",
