@@ -94,13 +94,44 @@ export function SignIn() {
       </form>
 
       <div className="mt-5 border-t border-line pt-4">
-        <p className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-muted">
-          <ShieldCheck size={14} /> Demo accounts
+        <p className="mb-2.5 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wide text-[#64748b]">
+          <ShieldCheck size={14} className="text-[#0284c7]" /> Instant 1-Click Demo Login
         </p>
-        <div className="flex flex-col gap-1.5 text-[12.5px]">
-          <p><span className="font-semibold">Admin/HR</span> · aarav@crewline.com</p>
-          <p><span className="font-semibold">Employee</span> · priya@company.com</p>
-          <p className="text-faint">Password for both: <code className="crew-mono">Crew@1234</code></p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const emp = await api.login('aarav@crewline.com', 'Crew@1234');
+                const comp = await api.getCompany();
+                setSession(emp, comp);
+                toast('success', 'Signed in as Admin / HR Officer (Aarav)');
+                navigate('/employees', { replace: true });
+              } catch (err) {
+                setApiError((err as Error).message);
+              }
+            }}
+            className="flex-1 rounded-md border border-[#c7d2fe] bg-[#eef2ff] py-2 px-2.5 text-xs font-bold text-[#4338ca] hover:bg-[#e0e7ff] transition"
+          >
+            ⚡ Admin / HR Portal
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const emp = await api.login('priya@company.com', 'Crew@1234');
+                const comp = await api.getCompany();
+                setSession(emp, comp);
+                toast('success', 'Signed in as Employee (Priya)');
+                navigate('/dashboard', { replace: true });
+              } catch (err) {
+                setApiError((err as Error).message);
+              }
+            }}
+            className="flex-1 rounded-md border border-[#bae6fd] bg-[#f0f9ff] py-2 px-2.5 text-xs font-bold text-[#0369a1] hover:bg-[#e0f2fe] transition"
+          >
+            ⚡ Employee Portal
+          </button>
         </div>
       </div>
     </AuthLayout>
